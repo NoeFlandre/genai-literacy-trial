@@ -1,0 +1,8 @@
+.git
+.venv
+.pytest_cache
+archive
+privacy_patterns.local.yml
+__pycache__
+.DS_Store
+

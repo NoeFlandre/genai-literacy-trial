@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this privacy-preserving reproducibility repository, please cite the associated manuscript."
+title: "A Three-Arm Trial to Evaluate the Impact of Training in Prompt Engineering onto Learning Outcomes Among Engineering Students"
+authors:
+  - family-names: "Flandre"
+    given-names: "Noe Y."
+  - family-names: "Giabbanelli"
+    given-names: "Philippe J."
+type: software
+license: MIT
+repository-code: "https://github.com/NoeFlandre/genai-literacy-trial"
+
