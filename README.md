@@ -1,5 +1,7 @@
 # GenAI Literacy Trial
 
+![Study Overview](docs/figures/study_overview.png)
+
 Privacy-preserving reproducibility artifact for a three-arm prompt-engineering training trial in an engineering algorithms course.
 
 The repository contains the public analysis package, synthetic fixtures, aggregate-only manuscript outputs, validation checks, and automated privacy gates. It is designed for conference review and reuse without exposing participant-level data.
