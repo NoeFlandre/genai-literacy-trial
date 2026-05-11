@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pandas as pd
+
+import genai_literacy_trial.quant_models as quant_models
 from genai_literacy_trial.quant_config import QuantConfig
 from genai_literacy_trial.quant_models import (
     calibration_models,
@@ -124,6 +127,42 @@ def test_prepost_model_requires_group_and_labels_analysis_type() -> None:
 
     assert "analysis_type" in prepost.columns
     assert prepost["analysis_type"].notna().all()
+
+
+def test_prepost_phase_p_value_excludes_interaction_terms(monkeypatch) -> None:
+    composites = pd.DataFrame(
+        {
+            "participant_key": ["p1", "p1", "p2", "p2", "p3", "p3", "p4", "p4"],
+            "phase": ["pre", "post"] * 4,
+            "group": ["A", "A", "A", "A", "B", "B", "B", "B"],
+            "trust": [1.0, 2.0, 1.0, 2.0, 1.0, 4.0, 1.0, 4.0],
+        }
+    )
+
+    class FakeModel:
+        def fit(self, reml=False, disp=False):
+            class FakeResult:
+                converged = True
+                nobs = len(composites)
+
+            return FakeResult()
+
+    monkeypatch.setattr(quant_models.smf, "mixedlm", lambda *args, **kwargs: FakeModel())
+    monkeypatch.setattr(
+        quant_models,
+        "_tidy_result",
+        lambda *args, **kwargs: pd.DataFrame(
+            {
+                "term": ["Intercept", "phase[T.pre]", "group[T.B]", "phase[T.pre]:group[T.B]"],
+                "p_value": [0.9, 0.42, 0.8, 0.01],
+            }
+        ),
+    )
+
+    prepost = prepost_survey_change_models(composites)
+
+    assert prepost.loc[0, "phase_p_value"] == 0.42
+    assert prepost.loc[0, "interaction_p_value"] == 0.01
 
 
 def test_prompt_missingness_sensitivity_outputs_min3_and_all4() -> None:

@@ -300,8 +300,9 @@ def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
             if not bool(getattr(result, "converged", True)):
                 raise ValueError("MixedLM did not converge")
             tidy = _tidy_result(result, f"prepost_{dim}", int(result.nobs))
-            phase_rows = tidy[tidy["term"].str.startswith("phase")]
-            interaction_rows = tidy[tidy["term"].str.contains(":")]
+            is_interaction = tidy["term"].str.contains(":")
+            phase_rows = tidy[tidy["term"].str.startswith("phase") & ~is_interaction]
+            interaction_rows = tidy[is_interaction]
             wide = composites.pivot_table(index="participant_key", columns="phase", values=dim, aggfunc="mean")
             diff = wide["post"] - wide["pre"] if {"pre", "post"} <= set(wide.columns) else pd.Series(dtype=float)
             stat = mean_ci_bootstrap(diff, n_boot=1000)
