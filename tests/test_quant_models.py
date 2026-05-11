@@ -5,6 +5,7 @@ from genai_literacy_trial.quant_models import (
     calibration_models,
     fit_prompt_trajectory_model,
     learning_outcome_models,
+    model_based_learning_prediction_table,
     participant_level_training_effect,
     perceived_usefulness_models,
 )
@@ -53,3 +54,31 @@ def test_calibration_and_perceived_usefulness_models_apply_fdr_and_report_n() ->
     assert set(usefulness["model"]) == {"final_points", "grade_change"}
     assert usefulness["n"].min() == len(participant)
 
+
+def test_standardized_betas_use_complete_case_model_sample() -> None:
+    participant, _, _ = _prepared()
+    participant.loc[0, "prior_chatgpt_use_score"] = None
+
+    calibration = calibration_models(participant)
+    usefulness = perceived_usefulness_models(participant)
+
+    assert calibration["n"].min() == len(participant) - 1
+    assert usefulness["n"].min() == len(participant) - 1
+
+
+def test_training_contrasts_report_p_values() -> None:
+    participant, _, _ = _prepared()
+
+    training = participant_level_training_effect(participant)
+
+    assert training["contrasts"]["p_value"].notna().all()
+
+
+def test_learning_prediction_table_uses_adjusted_model_ci() -> None:
+    participant, _, _ = _prepared()
+
+    prediction = model_based_learning_prediction_table(participant)
+
+    assert {"mean_prompt_score", "predicted_final_points", "ci_low", "ci_high"} <= set(prediction.columns)
+    assert len(prediction) == 30
+    assert (prediction["ci_high"] > prediction["ci_low"]).all()

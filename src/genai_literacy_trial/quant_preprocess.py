@@ -134,6 +134,17 @@ def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig
 
 
 def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFrame, retained_survey: pd.DataFrame, config: QuantConfig, expected: dict[str, Any] | None = None) -> pd.DataFrame:
+    phase_table = retained_survey.pivot_table(
+        index="participant_key",
+        columns=config.columns.phase,
+        values=config.columns.id,
+        aggfunc="size",
+        fill_value=0,
+    )
+    if config.pre_label not in phase_table.columns or config.post_label not in phase_table.columns:
+        raise ValueError("retained survey participants must have exactly one pre and one post row")
+    if not ((phase_table[config.pre_label] == 1) & (phase_table[config.post_label] == 1)).all():
+        raise ValueError("retained survey participants must have exactly one pre and one post row")
     if participant["participant_key"].duplicated().any():
         raise ValueError("participant-level table contains duplicated participant_key")
     if not set(participant["group"].dropna()).issubset(set(config.groups)):
@@ -146,9 +157,6 @@ def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFr
     transcript_cols = [col for col in assignment.columns if TRANSCRIPT_RE.search(str(col))]
     if transcript_cols:
         raise ValueError("prompt table contains transcript columns after preprocessing")
-    phase_counts = retained_survey.groupby("participant_key")[config.columns.phase].nunique()
-    if not (phase_counts == 2).all():
-        raise ValueError("retained survey participants must have exactly one pre and one post row")
     observed = {
         "retained_participants": int(len(participant)),
         "retained_survey_rows": int(len(retained_survey)),

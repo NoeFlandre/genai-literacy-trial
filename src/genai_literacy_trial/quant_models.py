@@ -5,6 +5,7 @@ import math
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 import statsmodels.formula.api as smf
 
 from genai_literacy_trial.quant_stats import (
@@ -51,6 +52,15 @@ def _tidy_result(result, model_name: str, n: int, adjusted_r2: float | None = No
     return pd.DataFrame(rows)
 
 
+def _scale_term_ci(row: pd.Series, scale: float) -> pd.Series:
+    out = row.copy()
+    out["std_beta"] = float(out["estimate"] * scale)
+    out["estimate"] = out["std_beta"]
+    out["ci_low"] = float(out["ci_low"] * scale)
+    out["ci_high"] = float(out["ci_high"] * scale)
+    return out
+
+
 def fit_prompt_trajectory_model(assignment_df: pd.DataFrame) -> ModelSummary:
     frame = assignment_df.dropna(subset=["prompt_score"]).copy()
     frame["assignment"] = frame["assignment"].astype(int).astype(str)
@@ -58,6 +68,8 @@ def fit_prompt_trajectory_model(assignment_df: pd.DataFrame) -> ModelSummary:
     try:
         model = smf.mixedlm(formula, data=frame, groups=frame["participant_key"])
         result = model.fit(reml=False, disp=False)
+        if not bool(getattr(result, "converged", True)):
+            raise ValueError("MixedLM did not converge")
         tidy = _tidy_result(result, "prompt_trajectory_mixedlm", len(frame))
         method = "mixedlm"
     except (ValueError, np.linalg.LinAlgError) as exc:
@@ -80,16 +92,32 @@ def _contrast_rows(df: pd.DataFrame, value: str) -> list[dict[str, float | str]]
     rows = []
     pairs = [("C", "A"), ("C", "B"), ("B", "A")]
     pooled = df.assign(group_pooled=np.where(df["group"] == "C", "C", "pooled_A_B"))
+    def contrast_p_value(a: pd.Series, b: pd.Series) -> float:
+        if len(a) < 1 or len(b) < 1:
+            return float("nan")
+        observed = abs(float(a.mean() - b.mean()))
+        combined = np.concatenate([a.to_numpy(), b.to_numpy()])
+        labels = np.array([0] * len(a) + [1] * len(b))
+        rng = np.random.default_rng(int("2026" + "0615"))
+        count = 0
+        n_perm = 2000
+        for _ in range(n_perm):
+            perm = rng.permutation(labels)
+            diff = abs(float(combined[perm == 0].mean() - combined[perm == 1].mean()))
+            count += diff >= observed
+        return float((count + 1) / (n_perm + 1))
     for left, right in pairs:
         a = df.loc[df["group"] == left, value].dropna()
         b = df.loc[df["group"] == right, value].dropna()
         effect = hedges_g(a, b, n_boot=1000)
         diff = mean_ci_bootstrap(a, n_boot=1000)["mean"] - mean_ci_bootstrap(b, n_boot=1000)["mean"]
-        rows.append({"contrast": f"{left} vs {right}", "mean_difference": diff, "hedges_g": effect["estimate"], "ci_low": effect["ci_low"], "ci_high": effect["ci_high"], "p_value": float(np.nan), "n": int(len(a) + len(b))})
+        p_value = contrast_p_value(a, b)
+        rows.append({"contrast": f"{left} vs {right}", "mean_difference": diff, "hedges_g": effect["estimate"], "ci_low": effect["ci_low"], "ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))})
     a = pooled.loc[pooled["group_pooled"] == "C", value].dropna()
     b = pooled.loc[pooled["group_pooled"] == "pooled_A_B", value].dropna()
     effect = hedges_g(a, b, n_boot=1000)
-    rows.append({"contrast": "C vs pooled A+B", "mean_difference": float(a.mean() - b.mean()), "hedges_g": effect["estimate"], "ci_low": effect["ci_low"], "ci_high": effect["ci_high"], "p_value": float(np.nan), "n": int(len(a) + len(b))})
+    p_value = contrast_p_value(a, b)
+    rows.append({"contrast": "C vs pooled A+B", "mean_difference": float(a.mean() - b.mean()), "hedges_g": effect["estimate"], "ci_low": effect["ci_low"], "ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))})
     return rows
 
 
@@ -122,10 +150,22 @@ def learning_outcome_models(participant_df: pd.DataFrame) -> dict[str, pd.DataFr
         work["prior_chatgpt_use_score"] = pd.to_numeric(work.get("prior_chatgpt_use", np.nan), errors="coerce")
     formula = "final_points ~ mean_prompt_score + midterm_points + group + prior_chatgpt_use_score"
     result = smf.ols(formula, data=work).fit(cov_type="HC3")
-    models.append(_tidy_result(result, "final_points", int(result.nobs)))
+    tidy = _tidy_result(result, "final_points", int(result.nobs))
+    y_sd = work["final_points"].std(ddof=1)
+    for term in ["mean_prompt_score", "midterm_points", "prior_chatgpt_use_score"]:
+        if term in tidy["term"].to_numpy() and y_sd and np.isfinite(y_sd):
+            scale = work[term].std(ddof=1) / y_sd
+            tidy.loc[tidy["term"] == term, "std_beta"] = tidy.loc[tidy["term"] == term, "estimate"] * scale
+    models.append(tidy)
     work["grade_change"] = work["final_points"] - work["midterm_points"]
     result2 = smf.ols("grade_change ~ mean_prompt_score + group + prior_chatgpt_use_score", data=work).fit(cov_type="HC3")
-    models.append(_tidy_result(result2, "grade_change", int(result2.nobs)))
+    tidy2 = _tidy_result(result2, "grade_change", int(result2.nobs))
+    y_sd = work["grade_change"].std(ddof=1)
+    for term in ["mean_prompt_score", "prior_chatgpt_use_score"]:
+        if term in tidy2["term"].to_numpy() and y_sd and np.isfinite(y_sd):
+            scale = work[term].std(ddof=1) / y_sd
+            tidy2.loc[tidy2["term"] == term, "std_beta"] = tidy2.loc[tidy2["term"] == term, "estimate"] * scale
+    models.append(tidy2)
     return {"correlations": pd.DataFrame(corrs), "models": pd.concat(models, ignore_index=True)}
 
 
@@ -140,12 +180,20 @@ def perceived_usefulness_models(participant_df: pd.DataFrame) -> pd.DataFrame:
     ]:
         work = frame.copy()
         work["grade_change"] = work["final_points"] - work["midterm_points"]
+        needed = ["perceived_usefulness", "prior_chatgpt_use_score", "group", "final_points"]
+        if model_name == "final_points":
+            needed.append("midterm_points")
+        else:
+            needed.append("grade_change")
+        work = work.dropna(subset=needed).copy()
         work["perceived_usefulness_z"] = standardize_series(work["perceived_usefulness"])
         formula_z = formula.replace("perceived_usefulness", "perceived_usefulness_z")
         result = smf.ols(formula_z, data=work).fit(cov_type="HC3")
         tidy = _tidy_result(result, model_name, int(result.nobs))
         row = tidy[tidy["term"] == "perceived_usefulness_z"].copy()
-        row = row.rename(columns={"estimate": "std_beta"})
+        y_sd = work[model_name].std(ddof=1)
+        if y_sd and np.isfinite(y_sd):
+            row = row.apply(lambda r: _scale_term_ci(r, 1 / y_sd), axis=1)
         rows.append(row)
     return pd.concat(rows, ignore_index=True)
 
@@ -162,13 +210,15 @@ def calibration_models(participant_df: pd.DataFrame) -> pd.DataFrame:
     for dim in dimensions:
         if dim not in frame.columns:
             continue
-        work = frame.copy()
+        work = frame.dropna(subset=["mean_prompt_score", dim, "group", "prior_chatgpt_use_score"]).copy()
         work[f"{dim}_z"] = standardize_series(work[dim])
         result = smf.ols(f"mean_prompt_score ~ {dim}_z + group + prior_chatgpt_use_score", data=work).fit(cov_type="HC3")
         tidy = _tidy_result(result, dim, int(result.nobs))
         row = tidy[tidy["term"] == f"{dim}_z"].copy()
+        y_sd = work["mean_prompt_score"].std(ddof=1)
+        if y_sd and np.isfinite(y_sd):
+            row = row.apply(lambda r: _scale_term_ci(r, 1 / y_sd), axis=1)
         row["dimension"] = dim
-        row = row.rename(columns={"estimate": "std_beta"})
         rows.append(row)
     out = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
     if not out.empty:
@@ -184,8 +234,36 @@ def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
         if {"pre", "post"} <= set(wide.columns):
             diff = wide["post"] - wide["pre"]
             stat = mean_ci_bootstrap(diff, n_boot=1000)
-            rows.append({"dimension": dim, "pre_mean": float(wide["pre"].mean()), "post_mean": float(wide["post"].mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(diff.dropna().shape[0]), "phase_p_value": float("nan"), "interaction_p_value": float("nan")})
+            paired = diff.dropna()
+            p_value = float(stats.ttest_rel(wide.loc[paired.index, "post"], wide.loc[paired.index, "pre"], nan_policy="omit").pvalue) if len(paired) > 1 else float("nan")
+            rows.append({"dimension": dim, "pre_mean": float(wide["pre"].mean()), "post_mean": float(wide["post"].mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(paired.shape[0]), "phase_p_value": p_value, "interaction_p_value": float("nan")})
     out = pd.DataFrame(rows)
     if not out.empty:
         out["fdr_p_value"] = benjamini_hochberg(out["phase_p_value"])
     return out
+
+
+def model_based_learning_prediction_table(participant_df: pd.DataFrame) -> pd.DataFrame:
+    frame = participant_df.copy()
+    if "prior_chatgpt_use_score" not in frame.columns:
+        frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
+    work = frame.dropna(subset=["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"]).copy()
+    if work.empty or work["mean_prompt_score"].nunique() < 2:
+        return pd.DataFrame({"mean_prompt_score": [], "predicted_final_points": [], "ci_low": [], "ci_high": []})
+    result = smf.ols("final_points ~ mean_prompt_score + midterm_points + group + prior_chatgpt_use_score", data=work).fit(cov_type="HC3")
+    x = np.linspace(work["mean_prompt_score"].min(), work["mean_prompt_score"].max(), 30)
+    reference = {
+        "mean_prompt_score": x,
+        "midterm_points": work["midterm_points"].mean(),
+        "group": work["group"].mode().iloc[0],
+        "prior_chatgpt_use_score": work["prior_chatgpt_use_score"].mean(),
+    }
+    pred = result.get_prediction(pd.DataFrame(reference)).summary_frame(alpha=0.05)
+    return pd.DataFrame(
+        {
+            "mean_prompt_score": x,
+            "predicted_final_points": pred["mean"].to_numpy(),
+            "ci_low": pred["mean_ci_lower"].to_numpy(),
+            "ci_high": pred["mean_ci_upper"].to_numpy(),
+        }
+    )

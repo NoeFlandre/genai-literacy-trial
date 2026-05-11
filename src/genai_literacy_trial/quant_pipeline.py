@@ -13,6 +13,7 @@ from genai_literacy_trial.quant_models import (
     estimate_prompt_trajectory_means,
     fit_prompt_trajectory_model,
     learning_outcome_models,
+    model_based_learning_prediction_table,
     participant_level_training_effect,
     perceived_usefulness_models,
     prepost_survey_change_models,
@@ -97,19 +98,12 @@ def _reliability(composites_source: pd.DataFrame, config: QuantConfig) -> pd.Dat
     for dim, items in config.survey_dimensions.items():
         existing = [item for item in items if item in pre.columns]
         scored = pre[existing].replace(config.likert_mapping).apply(pd.to_numeric, errors="coerce")
+        for item in config.reverse_coded_items.get(dim, []):
+            if item in scored.columns:
+                scored[item] = 6 - scored[item]
         alpha = cronbach_alpha(scored) if len(existing) >= 2 else np.nan
         rows.append({"dimension": dim, "n_items": len(existing), "cronbach_alpha": alpha})
     return pd.DataFrame(rows)
-
-
-def _learning_prediction_table(participant: pd.DataFrame) -> pd.DataFrame:
-    frame = participant.dropna(subset=["mean_prompt_score", "final_points", "midterm_points"]).copy()
-    if frame.empty:
-        return pd.DataFrame({"mean_prompt_score": [], "predicted_final_points": [], "ci_low": [], "ci_high": []})
-    x = np.linspace(frame["mean_prompt_score"].min(), frame["mean_prompt_score"].max(), 30)
-    slope = np.polyfit(frame["mean_prompt_score"], frame["final_points"], 1)
-    pred = slope[0] * x + slope[1]
-    return pd.DataFrame({"mean_prompt_score": x, "predicted_final_points": pred, "ci_low": pred - 0.25, "ci_high": pred + 0.25})
 
 
 def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_path: Path | None, output_dir: Path, public_output_dir: Path) -> dict[str, Path]:
@@ -164,7 +158,7 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
         generated.append(path.name)
     for path in plot_prompt_quality_trajectory(trajectory_means, public_output_dir):
         generated.append(path.name)
-    for path in plot_learning_outcome(_learning_prediction_table(participant), public_output_dir):
+    for path in plot_learning_outcome(model_based_learning_prediction_table(participant), public_output_dir):
         generated.append(path.name)
     for path in plot_calibration_forest(calibration if not calibration.empty else pd.DataFrame({"dimension": ["none"], "std_beta": [0], "ci_low": [0], "ci_high": [0], "fdr_p_value": [1]}), public_output_dir):
         generated.append(path.name)

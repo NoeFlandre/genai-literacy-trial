@@ -133,6 +133,8 @@ def write_quantitative_report(tables: dict[str, pd.DataFrame], output_dir: Path,
         lines += [f"## {section}", ""]
         if section == "Learning Outcomes":
             lines += [_md_table(corr), ""]
+            learning_models = tables.get("table_learning_outcome_models", pd.DataFrame())
+            lines += ["Adjusted learning-outcome models:", "", _md_table(learning_models), ""]
             usefulness = tables.get("table_perceived_usefulness_models", pd.DataFrame())
             lines += ["Targeted perceived-usefulness models:", "", _md_table(usefulness), ""]
         elif section == "Files Generated":
