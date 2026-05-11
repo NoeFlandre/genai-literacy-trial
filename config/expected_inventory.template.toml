@@ -1,0 +1,12 @@
+pre_responses = 6
+post_responses = 5
+retained_participants = 5
+retained_survey_rows = 10
+prompt_assignment_rows = 20
+scored_prompt_observations = 19
+missing_prompt_scores = 1
+
+[group_counts]
+A = 2
+B = 2
+C = 1

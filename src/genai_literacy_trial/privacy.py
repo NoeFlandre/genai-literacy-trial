@@ -22,6 +22,9 @@ SKIPPED_DIRS = {
     ".venv",
     "__pycache__",
     "archive",
+    "clean_private_data",
+    "private",
+    "private_outputs",
 }
 
 TEXT_SUFFIXES = {

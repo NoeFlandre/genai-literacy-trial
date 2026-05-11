@@ -1,8 +1,12 @@
-Email,Phase
-p01,Before
-p02,Before
-p03,Before
-p01,After
-p02,After
-p03,After
-
+participant_id,Email,phase,Phase,group,prior_chatgpt_use,useful_1,useful_2,control_1,control_reverse,trust_1,trust_2
+p01,p01,pre,Before,A,low,Agree,Agree,Agree,Disagree,Agree,Agree
+p01,p01,post,After,A,low,Strongly agree,Agree,Agree,Disagree,Agree,Agree
+p02,p02,pre,Before,A,high,Agree,Neutral,Agree,Disagree,Agree,Agree
+p02,p02,post,After,A,high,Strongly agree,Neutral,Agree,Disagree,Agree,Agree
+p03,p03,pre,Before,B,low,Agree,Agree,Agree,Disagree,Agree,Agree
+p03,p03,post,After,B,low,Strongly agree,Agree,Agree,Disagree,Agree,Agree
+p04,p04,pre,Before,B,high,Agree,Agree,Agree,Disagree,Agree,Agree
+p04,p04,post,After,B,high,Strongly agree,Agree,Agree,Disagree,Agree,Agree
+p05,p05,pre,Before,C,low,Agree,Agree,Agree,Disagree,Agree,Agree
+p05,p05,post,After,C,low,Strongly agree,Agree,Agree,Disagree,Agree,Agree
+p06,p06,pre,Before,C,high,Agree,Agree,Agree,Disagree,Agree,Agree

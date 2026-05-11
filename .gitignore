@@ -7,9 +7,19 @@ __pycache__/
 
 # Private raw research materials. This directory is intentionally local-only.
 archive/
+clean_private_data/
+clean_private_data/analysis_ready/
+data/private/
+private_outputs/
+config/private_quant_config.toml
+config/private_expected_inventory.toml
 privacy_patterns.local.yml
+*.xls
+*.xlsx
+*raw*.csv
+*roster*.csv
+*survey_export*.csv
 
 # Generated local reports/caches.
 htmlcov/
 .coverage
-

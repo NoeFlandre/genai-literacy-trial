@@ -1,5 +1,7 @@
-Email,Group,Midterm Grade,Final Grade
-p01,A,B,B+
-p02,B,B+,A-
-p03,C,A-,A
-
+participant_id,Email,group,Group,midterm_grade,Midterm Grade,final_grade,Final Grade,gender,major
+p01,p01,A,A,B,B,B+,B+,X,M1
+p02,p02,A,A,B+,B+,B+,B+,Y,M2
+p03,p03,B,B,B,B,A-,A-,X,M1
+p04,p04,B,B,A-,A-,A-,A-,Y,M2
+p05,p05,C,C,A-,A-,A,A,X,M1
+p06,p06,C,C,A,A,A,A,Y,M2

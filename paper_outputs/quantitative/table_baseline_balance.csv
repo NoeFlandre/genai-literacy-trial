@@ -1,0 +1,38 @@
+metric,group,n,value,mean,sd,ci_low,ci_high,gender,major,prior_chatgpt_use
+retained_n,all,45,45.0,,,,,,,
+midterm_points,A,13,,2.661538461538462,1.1056962071763214,2.023076923076923,3.1923076923076925,,,
+midterm_points,B,13,,2.5846153846153848,0.8792479303796643,2.0461538461538464,2.969230769230769,,,
+midterm_points,C,19,,2.7526315789473683,0.6414986109386811,2.4577631578947363,3.015789473684211,,,
+final_points,A,13,,2.692307692307693,0.9367154837173864,2.176923076923077,3.1692307692307695,,,
+final_points,B,13,,2.661538461538461,0.7320501594135718,2.269230769230769,3.023076923076923,,,
+final_points,C,19,,2.878947368421053,0.5421960975395659,2.6473684210526316,3.1159210526315775,,,
+mean_prompt_score,A,13,,2.9102564102564106,0.554298792166419,2.6282051282051286,3.198717948717949,,,
+mean_prompt_score,B,13,,2.9551282051282053,0.9680159313280146,2.4615384615384617,3.480769230769231,,,
+mean_prompt_score,C,19,,3.570175438596491,0.8665879406438771,3.1710526315789473,3.929824561403509,,,
+suppressed,suppressed,1,,,,,,suppressed,,
+gender,A,12,,,,,,Male,,
+gender,B,13,,,,,,Male,,
+suppressed,suppressed,3,,,,,,suppressed,,
+gender,C,16,,,,,,Male,,
+major,A,10,,,,,,,Computer Science,
+suppressed,suppressed,3,,,,,,,suppressed,
+major,B,9,,,,,,,Computer Science,
+suppressed,suppressed,2,,,,,,,suppressed,
+suppressed,suppressed,1,,,,,,,suppressed,
+suppressed,suppressed,1,,,,,,,suppressed,
+major,C,18,,,,,,,Computer Science,
+suppressed,suppressed,1,,,,,,,suppressed,
+suppressed,suppressed,1,,,,,,,,suppressed
+suppressed,suppressed,2,,,,,,,,suppressed
+suppressed,suppressed,2,,,,,,,,suppressed
+suppressed,suppressed,3,,,,,,,,suppressed
+prior_chatgpt_use,A,5,,,,,,,,Several times per semester
+suppressed,suppressed,2,,,,,,,,suppressed
+suppressed,suppressed,2,,,,,,,,suppressed
+suppressed,suppressed,1,,,,,,,,suppressed
+suppressed,suppressed,2,,,,,,,,suppressed
+prior_chatgpt_use,B,6,,,,,,,,Several times per semester
+suppressed,suppressed,2,,,,,,,,suppressed
+suppressed,suppressed,4,,,,,,,,suppressed
+prior_chatgpt_use,C,5,,,,,,,,Several days each week
+prior_chatgpt_use,C,8,,,,,,,,Several times per semester

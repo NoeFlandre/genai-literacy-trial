@@ -1,0 +1,8 @@
+metric,observed,expected,status
+missing_prompt_scores,36,36,pass
+post_responses,45,45,pass
+pre_responses,55,55,pass
+prompt_assignment_rows,180,180,pass
+retained_participants,45,45,pass
+retained_survey_rows,90,90,pass
+scored_prompt_observations,144,144,pass
