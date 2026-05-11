@@ -12,6 +12,7 @@ def test_report_contains_required_sections_and_privacy_language(tmp_path: Path) 
         "table_data_verification": pd.DataFrame({"metric": ["retained_participants"], "observed": [45], "expected": [45], "status": ["pass"]}),
         "table_prompt_grade_correlations": pd.DataFrame({"metric": ["mean_prompt_score vs final_points"], "n": [45], "correlation": [0.3], "p_value": [0.05]}),
         "table_learning_outcome_models": pd.DataFrame({"model": ["final_points"], "term": ["mean_prompt_score"], "n": [45]}),
+        "table_survey_reliability": pd.DataFrame({"dimension": ["trust"], "cronbach_alpha": [0.5]}),
     }
 
     path = write_quantitative_report(tables, tmp_path, generated_files=["a.csv", "fig.pdf"])
@@ -28,4 +29,5 @@ def test_report_contains_required_sections_and_privacy_language(tmp_path: Path) 
     assert "old n=90 prompt-grade p-values are not used" in text
     assert "participant-level analyses use one row per participant" in text
     assert "Adjusted learning-outcome models" in text
+    assert "Survey reliability" in text
     assert "@" not in text

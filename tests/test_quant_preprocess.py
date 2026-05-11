@@ -11,7 +11,9 @@ from genai_literacy_trial.quant_preprocess import (
     build_assignment_prompt_table,
     build_participant_table,
     compute_survey_composites,
+    prior_use_mapping_table,
     prepare_retained_survey,
+    suppress_small_cells,
     validate_analysis_inventory,
 )
 from tests.quant_fixtures import synthetic_quant_frames
@@ -102,3 +104,49 @@ def test_inventory_validation_requires_exactly_one_pre_and_post_row() -> None:
 
     with pytest.raises(ValueError, match="exactly one pre and one post"):
         validate_analysis_inventory(participant, assignment, retained, config)
+
+
+def test_inventory_validation_checks_expected_group_counts() -> None:
+    survey, grades, prompts = synthetic_quant_frames()
+    config = QuantConfig.default()
+    retained, _ = prepare_retained_survey(survey, config)
+    participant = build_participant_table(retained, grades, prompts, config)
+    assignment = build_assignment_prompt_table(prompts, participant, config)
+
+    inventory = validate_analysis_inventory(
+        participant,
+        assignment,
+        retained,
+        config,
+        expected={"group_counts": {"A": 2, "B": 2, "C": 1}},
+    )
+
+    assert {"group_count_A", "group_count_B", "group_count_C"} <= set(inventory["metric"])
+
+
+def test_prior_use_mapping_table_flags_unmapped_categories() -> None:
+    survey, _, _ = synthetic_quant_frames()
+    config = QuantConfig.default()
+    retained, _ = prepare_retained_survey(survey, config)
+    retained.loc[retained[config.columns.phase] == config.pre_label, config.columns.prior_chatgpt_use] = "unknown category"
+
+    mapping = prior_use_mapping_table(retained, config)
+
+    assert set(mapping["mapped_status"]) == {"unmapped"}
+
+
+def test_small_cell_suppression_collapses_and_hides_exact_counts() -> None:
+    table = pd.DataFrame(
+        {
+            "metric": ["gender", "gender", "gender"],
+            "group": ["A", "A", "A"],
+            "gender": ["large", "rare1", "rare2"],
+            "n": [6, 1, 2],
+        }
+    )
+
+    suppressed = suppress_small_cells(table, category_col="gender", min_count=5)
+
+    assert "Other/suppressed" in set(suppressed["gender"])
+    assert "1" not in set(suppressed["n"].astype(str))
+    assert "2" not in set(suppressed["n"].astype(str))

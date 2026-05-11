@@ -31,6 +31,15 @@ class ModelSummary:
     tidy: pd.DataFrame
 
 
+def _canonical_group(frame: pd.DataFrame) -> pd.DataFrame:
+    out = frame.copy()
+    if "group" not in out.columns and "group_x" in out.columns:
+        out = out.rename(columns={"group_x": "group"})
+    if "group_y" in out.columns:
+        out = out.drop(columns=["group_y"])
+    return out
+
+
 def _tidy_result(result, model_name: str, n: int, adjusted_r2: float | None = None) -> pd.DataFrame:
     ci = result.conf_int()
     rows = []
@@ -55,9 +64,25 @@ def _tidy_result(result, model_name: str, n: int, adjusted_r2: float | None = No
 def _scale_term_ci(row: pd.Series, scale: float) -> pd.Series:
     out = row.copy()
     out["std_beta"] = float(out["estimate"] * scale)
-    out["estimate"] = out["std_beta"]
-    out["ci_low"] = float(out["ci_low"] * scale)
-    out["ci_high"] = float(out["ci_high"] * scale)
+    out["std_ci_low"] = float(out["ci_low"] * scale)
+    out["std_ci_high"] = float(out["ci_high"] * scale)
+    return out
+
+
+def _model_diagnostics(frame: pd.DataFrame, model: str, required: list[str], survey_composite: str | None = None) -> dict[str, int | str]:
+    grade_change_required = "grade_change" in required
+    out: dict[str, int | str] = {
+        "model": model,
+        "starting_n": int(len(frame)),
+        "final_n": int(len(frame.dropna(subset=required))),
+        "loss_type": "marginal_non_additive",
+        "lost_final_grade": int(frame["final_points"].isna().sum()) if ("final_points" in required or grade_change_required) and "final_points" in frame else 0,
+        "lost_midterm_grade": int(frame["midterm_points"].isna().sum()) if ("midterm_points" in required or grade_change_required) and "midterm_points" in frame else 0,
+        "lost_mean_prompt_score": int(frame["mean_prompt_score"].isna().sum()) if "mean_prompt_score" in required and "mean_prompt_score" in frame else 0,
+        "lost_prior_chatgpt_use_score": int(frame["prior_chatgpt_use_score"].isna().sum()) if "prior_chatgpt_use_score" in required and "prior_chatgpt_use_score" in frame else 0,
+        "lost_survey_composite": int(frame[survey_composite].isna().sum()) if survey_composite and survey_composite in frame else 0,
+        "lost_group": int(frame["group"].isna().sum()) if "group" in required and "group" in frame else 0,
+    }
     return out
 
 
@@ -110,18 +135,29 @@ def _contrast_rows(df: pd.DataFrame, value: str) -> list[dict[str, float | str]]
         a = df.loc[df["group"] == left, value].dropna()
         b = df.loc[df["group"] == right, value].dropna()
         effect = hedges_g(a, b, n_boot=1000)
-        diff = mean_ci_bootstrap(a, n_boot=1000)["mean"] - mean_ci_bootstrap(b, n_boot=1000)["mean"]
+        diff_stat = _mean_difference_ci(a, b)
         p_value = contrast_p_value(a, b)
-        rows.append({"contrast": f"{left} vs {right}", "mean_difference": diff, "hedges_g": effect["estimate"], "ci_low": effect["ci_low"], "ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))})
+        rows.append({"contrast": f"{left} vs {right}", **diff_stat, "hedges_g": effect["estimate"], "hedges_g_ci_low": effect["ci_low"], "hedges_g_ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))})
     a = pooled.loc[pooled["group_pooled"] == "C", value].dropna()
     b = pooled.loc[pooled["group_pooled"] == "pooled_A_B", value].dropna()
     effect = hedges_g(a, b, n_boot=1000)
     p_value = contrast_p_value(a, b)
-    rows.append({"contrast": "C vs pooled A+B", "mean_difference": float(a.mean() - b.mean()), "hedges_g": effect["estimate"], "ci_low": effect["ci_low"], "ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))})
+    rows.append({"contrast": "C vs pooled A+B", **_mean_difference_ci(a, b), "hedges_g": effect["estimate"], "hedges_g_ci_low": effect["ci_low"], "hedges_g_ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))})
     return rows
 
 
+def _mean_difference_ci(a: pd.Series, b: pd.Series, seed: int = int("2026" + "0615"), n_boot: int = 1000) -> dict[str, float]:
+    x = pd.Series(a).dropna().astype(float).to_numpy()
+    y = pd.Series(b).dropna().astype(float).to_numpy()
+    if len(x) == 0 or len(y) == 0:
+        return {"mean_difference": math.nan, "mean_difference_ci_low": math.nan, "mean_difference_ci_high": math.nan}
+    rng = np.random.default_rng(seed)
+    boots = rng.choice(x, size=(n_boot, len(x)), replace=True).mean(axis=1) - rng.choice(y, size=(n_boot, len(y)), replace=True).mean(axis=1)
+    return {"mean_difference": float(x.mean() - y.mean()), "mean_difference_ci_low": float(np.quantile(boots, 0.025)), "mean_difference_ci_high": float(np.quantile(boots, 0.975))}
+
+
 def participant_level_training_effect(participant_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    participant_df = _canonical_group(participant_df)
     summary = group_summary_ci(participant_df, "group", "mean_prompt_score")
     summary.insert(0, "metric", "mean_prompt_score")
     summary["n_participants"] = len(participant_df)
@@ -137,7 +173,7 @@ def participant_level_training_effect(participant_df: pd.DataFrame) -> dict[str,
 
 
 def learning_outcome_models(participant_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    frame = participant_df.copy()
+    frame = _canonical_group(participant_df)
     corrs = []
     for outcome in ["midterm_points", "final_points"]:
         pearson = pearson_with_fisher_ci(frame["mean_prompt_score"], frame[outcome])
@@ -169,9 +205,28 @@ def learning_outcome_models(participant_df: pd.DataFrame) -> dict[str, pd.DataFr
     return {"correlations": pd.DataFrame(corrs), "models": pd.concat(models, ignore_index=True)}
 
 
+def complete_case_diagnostics(participant_df: pd.DataFrame) -> pd.DataFrame:
+    frame = _canonical_group(participant_df)
+    if "prior_chatgpt_use_score" not in frame.columns:
+        frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
+    rows = [
+        _model_diagnostics(frame, "final_points", ["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"]),
+        _model_diagnostics(frame.assign(grade_change=frame["final_points"] - frame["midterm_points"]), "grade_change", ["grade_change", "mean_prompt_score", "group", "prior_chatgpt_use_score"]),
+        _model_diagnostics(frame, "perceived_usefulness_final_points", ["final_points", "midterm_points", "perceived_usefulness", "group", "prior_chatgpt_use_score"], "perceived_usefulness"),
+        _model_diagnostics(frame.assign(grade_change=frame["final_points"] - frame["midterm_points"]), "perceived_usefulness_grade_change", ["grade_change", "perceived_usefulness", "group", "prior_chatgpt_use_score"], "perceived_usefulness"),
+    ]
+    for dim in [
+        "trust", "perceived_usefulness", "perceived_ease_of_use", "behavioral_intention",
+        "hedonic_motivation", "locus_of_control", "facilitating_conditions", "social_influence", "attitude",
+    ]:
+        if dim in frame.columns:
+            rows.append(_model_diagnostics(frame, f"calibration_{dim}", ["mean_prompt_score", dim, "group", "prior_chatgpt_use_score"], dim))
+    return pd.DataFrame(rows)
+
+
 def perceived_usefulness_models(participant_df: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    frame = participant_df.copy()
+    frame = _canonical_group(participant_df)
     if "prior_chatgpt_use_score" not in frame.columns:
         frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
     for model_name, formula in [
@@ -204,7 +259,7 @@ def calibration_models(participant_df: pd.DataFrame) -> pd.DataFrame:
         "hedonic_motivation", "locus_of_control", "facilitating_conditions", "social_influence", "attitude",
     ]
     rows = []
-    frame = participant_df.copy()
+    frame = _canonical_group(participant_df)
     if "prior_chatgpt_use_score" not in frame.columns:
         frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
     for dim in dimensions:
@@ -227,24 +282,75 @@ def calibration_models(participant_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
-    dims = [c for c in composites.columns if c not in {"participant_key", "phase"} and not c.endswith("_items_present")]
+    composites = composites.copy()
+    if "group" not in composites.columns and "group_x" in composites.columns:
+        composites = composites.rename(columns={"group_x": "group"})
+    if "group" not in composites.columns:
+        raise ValueError("pre/post survey change models require group in the composite table")
+    dims = [
+        c
+        for c in composites.columns
+        if c not in {"participant_key", "phase", "group", "prior_chatgpt_use_score"} and not c.endswith("_items_present")
+    ]
     rows = []
     for dim in dims:
-        wide = composites.pivot_table(index="participant_key", columns="phase", values=dim, aggfunc="mean")
-        if {"pre", "post"} <= set(wide.columns):
+        long = composites[["participant_key", "phase", "group", dim]].dropna().copy()
+        try:
+            result = smf.mixedlm(f"{dim} ~ phase * group", data=long, groups=long["participant_key"]).fit(reml=False, disp=False)
+            if not bool(getattr(result, "converged", True)):
+                raise ValueError("MixedLM did not converge")
+            tidy = _tidy_result(result, f"prepost_{dim}", int(result.nobs))
+            phase_rows = tidy[tidy["term"].str.startswith("phase")]
+            interaction_rows = tidy[tidy["term"].str.contains(":")]
+            wide = composites.pivot_table(index="participant_key", columns="phase", values=dim, aggfunc="mean")
+            diff = wide["post"] - wide["pre"] if {"pre", "post"} <= set(wide.columns) else pd.Series(dtype=float)
+            stat = mean_ci_bootstrap(diff, n_boot=1000)
+            rows.append({"dimension": dim, "analysis_type": "mixed_model", "pre_mean": float(wide.get("pre", pd.Series(dtype=float)).mean()), "post_mean": float(wide.get("post", pd.Series(dtype=float)).mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(long["participant_key"].nunique()), "phase_p_value": float(phase_rows["p_value"].min()) if not phase_rows.empty else math.nan, "interaction_p_value": float(interaction_rows["p_value"].min()) if not interaction_rows.empty else math.nan})
+        except (ValueError, np.linalg.LinAlgError):
+            wide = composites.pivot_table(index="participant_key", columns="phase", values=dim, aggfunc="mean")
+            if not {"pre", "post"} <= set(wide.columns):
+                continue
             diff = wide["post"] - wide["pre"]
             stat = mean_ci_bootstrap(diff, n_boot=1000)
             paired = diff.dropna()
             p_value = float(stats.ttest_rel(wide.loc[paired.index, "post"], wide.loc[paired.index, "pre"], nan_policy="omit").pvalue) if len(paired) > 1 else float("nan")
-            rows.append({"dimension": dim, "pre_mean": float(wide["pre"].mean()), "post_mean": float(wide["post"].mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(paired.shape[0]), "phase_p_value": p_value, "interaction_p_value": float("nan")})
+            rows.append({"dimension": dim, "analysis_type": "paired_descriptive_fallback", "pre_mean": float(wide["pre"].mean()), "post_mean": float(wide["post"].mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(paired.shape[0]), "phase_p_value": p_value, "interaction_p_value": float("nan")})
     out = pd.DataFrame(rows)
     if not out.empty:
         out["fdr_p_value"] = benjamini_hochberg(out["phase_p_value"])
     return out
 
 
+def prompt_missingness_sensitivity(participant_df: pd.DataFrame, min_all4_n: int = 30) -> dict[str, pd.DataFrame]:
+    frame = _canonical_group(participant_df)
+    distribution = frame.groupby(["group", "scored_assignments"], dropna=False).size().reset_index(name="n").sort_values(["group", "scored_assignments"])
+
+    def model_for(subset: pd.DataFrame, label: str, include_scored: bool = False) -> pd.DataFrame:
+        work = subset.copy()
+        if "prior_chatgpt_use_score" not in work.columns:
+            work["prior_chatgpt_use_score"] = pd.to_numeric(work.get("prior_chatgpt_use", np.nan), errors="coerce")
+        terms = "mean_prompt_score + midterm_points + group + prior_chatgpt_use_score"
+        if include_scored:
+            terms += " + scored_assignments"
+        work = work.dropna(subset=["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
+        if len(work) < 3:
+            return pd.DataFrame([{"model": label, "status": "not_run_small_n", "n": int(len(work))}])
+        result = smf.ols(f"final_points ~ {terms}", data=work).fit(cov_type="HC3")
+        out = _tidy_result(result, label, int(result.nobs))
+        out["status"] = "run"
+        return out
+
+    min3 = model_for(frame[frame["scored_assignments"] >= 3], "min3_scored_assignments", include_scored=True)
+    all4_subset = frame[frame["scored_assignments"] == 4]
+    if len(all4_subset) < min_all4_n:
+        all4 = pd.DataFrame([{"model": "all4_scored_assignments", "status": "not_run_small_n", "n": int(len(all4_subset))}])
+    else:
+        all4 = model_for(all4_subset, "all4_scored_assignments")
+    return {"scored_assignment_distribution": distribution, "min3_assignments": min3, "all4_assignments": all4}
+
+
 def model_based_learning_prediction_table(participant_df: pd.DataFrame) -> pd.DataFrame:
-    frame = participant_df.copy()
+    frame = _canonical_group(participant_df)
     if "prior_chatgpt_use_score" not in frame.columns:
         frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
     work = frame.dropna(subset=["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"]).copy()

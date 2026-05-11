@@ -10,18 +10,21 @@ from genai_literacy_trial.quant_config import QuantConfig, load_expected_invento
 from genai_literacy_trial.quant_figures import plot_calibration_forest, plot_learning_outcome, plot_prompt_quality_trajectory
 from genai_literacy_trial.quant_models import (
     calibration_models,
+    complete_case_diagnostics,
     estimate_prompt_trajectory_means,
     fit_prompt_trajectory_model,
     learning_outcome_models,
     model_based_learning_prediction_table,
     participant_level_training_effect,
     perceived_usefulness_models,
+    prompt_missingness_sensitivity,
     prepost_survey_change_models,
 )
 from genai_literacy_trial.quant_preprocess import (
     build_assignment_prompt_table,
     build_participant_table,
     compute_survey_composites,
+    prior_use_mapping_table,
     prepare_retained_survey,
     suppress_small_cells,
     validate_analysis_inventory,
@@ -37,6 +40,7 @@ REQUIRED_TABLES = [
     "table_prompt_trajectory_model",
     "table_prompt_trajectory_estimated_means",
     "table_participant_training_contrasts",
+    "table_participant_training_tests",
     "table_learning_outcome_models",
     "table_prompt_grade_correlations",
     "table_calibration_models",
@@ -44,6 +48,11 @@ REQUIRED_TABLES = [
     "table_prepost_survey_change",
     "table_small_sample_sensitivity",
     "table_perceived_usefulness_models",
+    "table_complete_case_diagnostics",
+    "table_prior_use_mapping",
+    "table_scored_assignment_distribution_by_group",
+    "table_prompt_sensitivity_min3_assignments",
+    "table_prompt_sensitivity_all4_assignments",
 ]
 
 
@@ -63,6 +72,7 @@ def _read_input(input_dir: Path, name: str) -> pd.DataFrame:
 
 def _merge_pre_composites(participant: pd.DataFrame, composites: pd.DataFrame) -> pd.DataFrame:
     pre = composites[composites["phase"].isin(["pre", "Before"])].drop(columns=["phase"], errors="ignore")
+    pre = pre.drop(columns=["group"], errors="ignore")
     pre = pre.drop_duplicates("participant_key")
     return participant.merge(pre, on="participant_key", how="left")
 
@@ -78,7 +88,7 @@ def _baseline(participant: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
         if cat in participant.columns:
             counts = participant.groupby(["group", cat], dropna=False).size().reset_index(name="n")
             counts.insert(0, "metric", cat)
-            counts = suppress_small_cells(counts, min_count=config.min_public_cell_count)
+            counts = suppress_small_cells(counts, category_col=cat, min_count=config.min_public_cell_count)
             rows.extend(counts.to_dict("records"))
     return pd.DataFrame(rows)
 
@@ -118,6 +128,10 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
     composites = compute_survey_composites(retained, config)
     participant = _merge_pre_composites(participant, composites)
     assignment = build_assignment_prompt_table(prompts, participant, config)
+    prior_mapping = prior_use_mapping_table(retained, config, min_count=config.min_public_cell_count)
+    if not prior_mapping.empty and (prior_mapping["mapped_status"] == "unmapped").any():
+        unmapped = ", ".join(prior_mapping.loc[prior_mapping["mapped_status"] == "unmapped", "prior_chatgpt_use"].astype(str))
+        raise ValueError(f"Unmapped prior ChatGPT use categories: {unmapped}")
     inventory = validate_analysis_inventory(participant, assignment, retained, config, expected)
     if expected:
         for metric in ["pre_responses", "post_responses"]:
@@ -132,6 +146,7 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
     calibration = calibration_models(participant)
     usefulness = perceived_usefulness_models(participant)
     prepost = prepost_survey_change_models(composites)
+    sensitivity = prompt_missingness_sensitivity(participant)
 
     tables = {
         "table_data_verification": inventory.sort_values("metric"),
@@ -140,6 +155,7 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
         "table_prompt_trajectory_model": trajectory.tidy,
         "table_prompt_trajectory_estimated_means": trajectory_means,
         "table_participant_training_contrasts": training["contrasts"],
+        "table_participant_training_tests": training["tests"],
         "table_learning_outcome_models": learning["models"],
         "table_prompt_grade_correlations": learning["correlations"],
         "table_calibration_models": calibration,
@@ -147,6 +163,11 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
         "table_prepost_survey_change": prepost,
         "table_small_sample_sensitivity": pd.DataFrame([small_sample_sensitivity()]),
         "table_perceived_usefulness_models": usefulness,
+        "table_complete_case_diagnostics": complete_case_diagnostics(participant),
+        "table_prior_use_mapping": prior_mapping,
+        "table_scored_assignment_distribution_by_group": sensitivity["scored_assignment_distribution"],
+        "table_prompt_sensitivity_min3_assignments": sensitivity["min3_assignments"],
+        "table_prompt_sensitivity_all4_assignments": sensitivity["all4_assignments"],
     }
 
     public_output_dir.mkdir(parents=True, exist_ok=True)
@@ -160,7 +181,7 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
         generated.append(path.name)
     for path in plot_learning_outcome(model_based_learning_prediction_table(participant), public_output_dir):
         generated.append(path.name)
-    for path in plot_calibration_forest(calibration if not calibration.empty else pd.DataFrame({"dimension": ["none"], "std_beta": [0], "ci_low": [0], "ci_high": [0], "fdr_p_value": [1]}), public_output_dir):
+    for path in plot_calibration_forest(calibration if not calibration.empty else pd.DataFrame({"dimension": ["none"], "std_beta": [0], "std_ci_low": [0], "std_ci_high": [0], "fdr_p_value": [1]}), public_output_dir):
         generated.append(path.name)
     report = write_quantitative_report(tables, public_output_dir, generated)
     generated.append(report.name)

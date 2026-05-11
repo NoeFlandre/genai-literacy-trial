@@ -12,6 +12,9 @@
 
 | metric | observed | expected | status |
 | --- | --- | --- | --- |
+| group_count_A | 13 | 13 | pass |
+| group_count_B | 13 | 13 | pass |
+| group_count_C | 19 | 19 | pass |
 | missing_prompt_scores | 36 | 36 | pass |
 | post_responses | 45 | 45 | pass |
 | pre_responses | 55 | 55 | pass |
@@ -55,33 +58,24 @@ participant-level analyses use one row per participant; old n=90 prompt-grade p-
 | mean_prompt_score | A | 13 | nan | 2.9102564102564106 | 0.554298792166419 | 2.6282051282051286 | 3.198717948717949 | nan | nan | nan |
 | mean_prompt_score | B | 13 | nan | 2.9551282051282053 | 0.9680159313280146 | 2.4615384615384617 | 3.480769230769231 | nan | nan | nan |
 | mean_prompt_score | C | 19 | nan | 3.570175438596491 | 0.8665879406438771 | 3.1710526315789473 | 3.929824561403509 | nan | nan | nan |
-| suppressed | suppressed | 1 | nan | nan | nan | nan | nan | suppressed | nan | nan |
 | gender | A | 12 | nan | nan | nan | nan | nan | Male | nan | nan |
 | gender | B | 13 | nan | nan | nan | nan | nan | Male | nan | nan |
-| suppressed | suppressed | 3 | nan | nan | nan | nan | nan | suppressed | nan | nan |
 | gender | C | 16 | nan | nan | nan | nan | nan | Male | nan | nan |
+| gender | A | suppressed | nan | nan | nan | nan | nan | Other/suppressed | nan | nan |
+| gender | C | suppressed | nan | nan | nan | nan | nan | Other/suppressed | nan | nan |
 | major | A | 10 | nan | nan | nan | nan | nan | nan | Computer Science | nan |
-| suppressed | suppressed | 3 | nan | nan | nan | nan | nan | nan | suppressed | nan |
 | major | B | 9 | nan | nan | nan | nan | nan | nan | Computer Science | nan |
-| suppressed | suppressed | 2 | nan | nan | nan | nan | nan | nan | suppressed | nan |
-| suppressed | suppressed | 1 | nan | nan | nan | nan | nan | nan | suppressed | nan |
-| suppressed | suppressed | 1 | nan | nan | nan | nan | nan | nan | suppressed | nan |
 | major | C | 18 | nan | nan | nan | nan | nan | nan | Computer Science | nan |
-| suppressed | suppressed | 1 | nan | nan | nan | nan | nan | nan | suppressed | nan |
-| suppressed | suppressed | 1 | nan | nan | nan | nan | nan | nan | nan | suppressed |
-| suppressed | suppressed | 2 | nan | nan | nan | nan | nan | nan | nan | suppressed |
-| suppressed | suppressed | 2 | nan | nan | nan | nan | nan | nan | nan | suppressed |
-| suppressed | suppressed | 3 | nan | nan | nan | nan | nan | nan | nan | suppressed |
+| major | A | suppressed | nan | nan | nan | nan | nan | nan | Other/suppressed | nan |
+| major | B | suppressed | nan | nan | nan | nan | nan | nan | Other/suppressed | nan |
+| major | C | suppressed | nan | nan | nan | nan | nan | nan | Other/suppressed | nan |
 | prior_chatgpt_use | A | 5 | nan | nan | nan | nan | nan | nan | nan | Several times per semester |
-| suppressed | suppressed | 2 | nan | nan | nan | nan | nan | nan | nan | suppressed |
-| suppressed | suppressed | 2 | nan | nan | nan | nan | nan | nan | nan | suppressed |
-| suppressed | suppressed | 1 | nan | nan | nan | nan | nan | nan | nan | suppressed |
-| suppressed | suppressed | 2 | nan | nan | nan | nan | nan | nan | nan | suppressed |
 | prior_chatgpt_use | B | 6 | nan | nan | nan | nan | nan | nan | nan | Several times per semester |
-| suppressed | suppressed | 2 | nan | nan | nan | nan | nan | nan | nan | suppressed |
-| suppressed | suppressed | 4 | nan | nan | nan | nan | nan | nan | nan | suppressed |
 | prior_chatgpt_use | C | 5 | nan | nan | nan | nan | nan | nan | nan | Several days each week |
 | prior_chatgpt_use | C | 8 | nan | nan | nan | nan | nan | nan | nan | Several times per semester |
+| prior_chatgpt_use | A | suppressed | nan | nan | nan | nan | nan | nan | nan | Other/suppressed |
+| prior_chatgpt_use | B | suppressed | nan | nan | nan | nan | nan | nan | nan | Other/suppressed |
+| prior_chatgpt_use | C | suppressed | nan | nan | nan | nan | nan | nan | nan | Other/suppressed |
 
 ## Primary Analysis: Prompt Quality Over Assignments
 
@@ -103,12 +97,53 @@ participant-level analyses use one row per participant; old n=90 prompt-grade p-
 
 ## Participant-Level Robustness
 
-| contrast | mean_difference | hedges_g | ci_low | ci_high | p_value | n |
-| --- | --- | --- | --- | --- | --- | --- |
-| C vs A | 0.6599190283400804 | 0.8494565245885356 | 0.21677843280179307 | 1.9692303129268283 | 0.020989505247376312 | 32 |
-| C vs B | 0.6150472334682857 | 0.6599111915278034 | -0.013424313147800106 | 1.7108336450309234 | 0.07246376811594203 | 32 |
-| B vs A | 0.04487179487179471 | 0.05509215528733113 | -0.7605302552346401 | 0.8795489215490018 | 0.896551724137931 | 26 |
-| C vs pooled A+B | 0.6374831309041835 | 0.7698062634970416 | 0.17571718454776897 | 1.6686738149900378 | 0.013993003498250875 | 45 |
+| contrast | mean_difference | mean_difference_ci_low | mean_difference_ci_high | hedges_g | hedges_g_ci_low | hedges_g_ci_high | p_value | n |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| C vs A | 0.6599190283400804 | 0.18077766531713874 | 1.1124240890688262 | 0.8494565245885356 | 0.21677843280179307 | 1.9692303129268283 | 0.020989505247376312 | 32 |
+| C vs B | 0.6150472334682857 | -0.021634615384616026 | 1.2328525641025636 | 0.6599111915278034 | -0.013424313147800106 | 1.7108336450309234 | 0.07246376811594203 | 32 |
+| B vs A | 0.04487179487179471 | -0.5262820512820516 | 0.647596153846154 | 0.05509215528733113 | -0.7605302552346401 | 0.8795489215490018 | 0.896551724137931 | 26 |
+| C vs pooled A+B | 0.6374831309041835 | 0.1549426450742232 | 1.0751602564102565 | 0.7698062634970416 | 0.17571718454776897 | 1.6686738149900378 | 0.013993003498250875 | 45 |
+
+Omnibus training-effect tests:
+
+| test | statistic | p_value |
+| --- | --- | --- |
+| welch_anova | 3.5901062186610364 | 0.042067911466339494 |
+| kruskal_wallis | 8.417069252701523 | 0.014868139762776528 |
+| permutation_anova | 3.3027352386976063 | 0.03796203796203796 |
+
+Scored assignment distribution by group:
+
+| group | scored_assignments | n |
+| --- | --- | --- |
+| A | 2 | 1 |
+| A | 3 | 6 |
+| A | 4 | 6 |
+| B | 2 | 2 |
+| B | 3 | 4 |
+| B | 4 | 7 |
+| C | 1 | 1 |
+| C | 2 | 5 |
+| C | 3 | 7 |
+| C | 4 | 6 |
+
+Missing-prompt sensitivity, at least three scored assignments:
+
+| model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| min3_scored_assignments | Intercept | 0.9797177363689489 | -1.697965309241749 | 3.657400781979647 | 0.473302034773077 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
+| min3_scored_assignments | group[T.B] | -0.18134022281595652 | -0.7634602684985012 | 0.4007798228665882 | 0.5414896698894691 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
+| min3_scored_assignments | group[T.C] | -0.10105386841691844 | -0.6579496309885836 | 0.45584189415474674 | 0.7221000517073881 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
+| min3_scored_assignments | mean_prompt_score | 0.34796296028521173 | -0.06832207554907616 | 0.7642479961194997 | 0.10136158400429784 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
+| min3_scored_assignments | midterm_points | 0.5317877738302725 | 0.2943585252459223 | 0.7692170224146228 | 1.1341548181384073e-05 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
+| min3_scored_assignments | prior_chatgpt_use_score | -0.09212076075535752 | -0.3030527841676346 | 0.11881126265691952 | 0.39200941933267763 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
+| min3_scored_assignments | scored_assignments | -0.11141660298969702 | -0.6308014139027032 | 0.4079682079233091 | 0.6741607064265547 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
+
+Missing-prompt sensitivity, all four scored assignments:
+
+| model | status | n |
+| --- | --- | --- |
+| all4_scored_assignments | not_run_small_n | 19 |
 
 ## Learning Outcomes
 
@@ -123,52 +158,94 @@ Adjusted learning-outcome models:
 
 | model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | std_beta |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| final_points | Intercept | 1.374678562212819 | -0.5721882166936583 | 3.3215453411192963 | 0.1663809701838005 | 32 | 0.3950819697162049 | 0.27875157927701355 | standard | nan |
-| final_points | group[T.B] | -0.16343094875670328 | -0.8654577760930959 | 0.5385958785796894 | 0.6481907202623595 | 32 | 0.3950819697162049 | 0.27875157927701355 | standard | nan |
-| final_points | group[T.C] | -0.0829511743582434 | -0.7475277644108109 | 0.5816254156943241 | 0.8067360082931219 | 32 | 0.3950819697162049 | 0.27875157927701355 | standard | nan |
-| final_points | mean_prompt_score | 0.33024036388636724 | -0.044269828828168545 | 0.704750556600903 | 0.08393768116341052 | 32 | 0.3950819697162049 | 0.27875157927701355 | standard | 0.3976625347187168 |
-| final_points | midterm_points | 0.2930104445162164 | -0.2397659784355004 | 0.8257868674679332 | 0.28106983069976166 | 32 | 0.3950819697162049 | 0.27875157927701355 | standard | 0.34554585824272105 |
-| final_points | prior_chatgpt_use_score | -0.09692507535703163 | -0.28158136136297024 | 0.08773121064890699 | 0.3035857065947686 | 32 | 0.3950819697162049 | 0.27875157927701355 | standard | -0.16413510818529262 |
-| grade_change | Intercept | 0.006959833289353734 | -1.3520994283368557 | 1.366019094915563 | 0.9919916821314856 | 32 | 0.07610646020708278 | -0.06076665679927529 | standard | nan |
-| grade_change | group[T.B] | 0.13398696874775465 | -0.8201970678560213 | 1.0881710053515306 | 0.78314794482086 | 32 | 0.07610646020708278 | -0.06076665679927529 | standard | nan |
-| grade_change | group[T.C] | 0.16251347564792873 | -0.39617553642974535 | 0.7212024877256028 | 0.5685953645421726 | 32 | 0.07610646020708278 | -0.06076665679927529 | standard | nan |
-| grade_change | mean_prompt_score | 0.13938185853459845 | -0.24427889375245576 | 0.5230426108216526 | 0.47643739091182846 | 32 | 0.07610646020708278 | -0.06076665679927529 | standard | 0.16442193428840335 |
-| grade_change | prior_chatgpt_use_score | -0.1404055723294399 | -0.3901967206784607 | 0.10938557601958085 | 0.2706008972422609 | 32 | 0.07610646020708278 | -0.06076665679927529 | standard | -0.23292637194151558 |
+| final_points | Intercept | 1.1435457475586652 | -0.05960989158135099 | 2.3467013866986814 | 0.062482203718806945 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | nan |
+| final_points | group[T.B] | -0.0035650395777174215 | -0.5768557301758019 | 0.569725651020367 | 0.99027550928022 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | nan |
+| final_points | group[T.C] | 0.012521747234972042 | -0.4261201260570112 | 0.45116362052695536 | 0.9553813469175843 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | nan |
+| final_points | mean_prompt_score | 0.25582608780811134 | -0.029256556253143273 | 0.5409087318693659 | 0.07860757267438812 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | 0.30805577285504626 |
+| final_points | midterm_points | 0.40979365185129896 | 0.055432090208506146 | 0.7641552134940918 | 0.02341728058288702 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | 0.4832677530153335 |
+| final_points | prior_chatgpt_use_score | -0.09309271819311192 | -0.2472730825666279 | 0.061087646180404034 | 0.23664723588723158 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | -0.1542162958707832 |
+| grade_change | Intercept | 0.09903405056080139 | -0.9564467693830672 | 1.15451487050467 | 0.8540917193223658 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | nan |
+| grade_change | group[T.B] | 0.05010893621778689 | -0.69427167676711 | 0.7944895492026838 | 0.8950337344395976 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | nan |
+| grade_change | group[T.C] | 0.07621476762795129 | -0.38160223154864714 | 0.5340317668045498 | 0.7442097604600415 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | nan |
+| grade_change | mean_prompt_score | 0.08063477075577166 | -0.27675254120140946 | 0.43802208271295273 | 0.6583352190202755 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | 0.0951208795603405 |
+| grade_change | prior_chatgpt_use_score | -0.09845312043876123 | -0.28671696022428383 | 0.08981071934676138 | 0.3053778887328493 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | -0.1597765433733991 |
+
+Complete-case diagnostics; loss columns are marginal and non-additive:
+
+| model | starting_n | final_n | loss_type | lost_final_grade | lost_midterm_grade | lost_mean_prompt_score | lost_prior_chatgpt_use_score | lost_survey_composite | lost_group |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| final_points | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| grade_change | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| perceived_usefulness_final_points | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| perceived_usefulness_grade_change | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_trust | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_perceived_usefulness | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_perceived_ease_of_use | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_behavioral_intention | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_hedonic_motivation | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_locus_of_control | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_facilitating_conditions | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_social_influence | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| calibration_attitude | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Prior ChatGPT-use coding:
+
+| prior_chatgpt_use | n | mapped_score | mapped_status |
+| --- | --- | --- | --- |
+| At least once per week | 5 | 4.0 | mapped |
+| I tried it once or twice | 8 | 2.0 | mapped |
+| Never | suppressed | 1.0 | mapped |
+| Several days each week | 10 | 5.0 | mapped |
+| Several times per semester | 19 | 3.0 | mapped |
 
 Targeted perceived-usefulness models:
 
-| model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | std_beta |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| final_points | perceived_usefulness_z | -0.029823436286986978 | -0.46443477307754255 | 0.4047879005035686 | 0.8930115115809609 | 32 | 0.27298994089267115 | 0.13318031414126175 | standard | -0.029823436286986978 |
-| grade_change | perceived_usefulness_z | 0.25673746647269474 | -0.08330752949748868 | 0.5967824624428781 | 0.13892851065405595 | 32 | 0.10075006590452618 | -0.0324721465540625 | standard | 0.25673746647269474 |
+| model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | std_beta | std_ci_low | std_ci_high |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| final_points | perceived_usefulness_z | -0.05101871741598929 | -0.26804868760544326 | 0.16601125277346468 | 0.6449836317911224 | 45 | 0.36716564037816957 | 0.2860330301702426 | standard | -0.07102114720357074 | -0.3731400212382424 | 0.23109772683110097 |
+| grade_change | perceived_usefulness_z | 0.15226785806393336 | -0.060479601997334625 | 0.3650153181252014 | 0.16068015924388312 | 45 | 0.05788777729214656 | -0.03632344497863893 | standard | 0.20765163974589673 | -0.08247760680164475 | 0.49778088629343825 |
 
 ## Calibration: Beliefs vs Actual Prompt Skill
 
-| model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | std_beta | dimension | fdr_p_value |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| trust | trust_z | -0.29413939993547494 | -0.7171769587179998 | 0.12889815884704994 | 0.1729552051973735 | 32 | 0.2570288684742611 | 0.14695907121118867 | standard | -0.29413939993547494 | trust | 0.4006467854319993 |
-| perceived_usefulness | perceived_usefulness_z | -0.34618000024021894 | -0.8499909009062785 | 0.1576309004258406 | 0.17806523796977747 | 32 | 0.2544687172518594 | 0.1440196383262089 | standard | -0.34618000024021894 | perceived_usefulness | 0.4006467854319993 |
-| perceived_ease_of_use | perceived_ease_of_use_z | -0.4127830254166533 | -0.8129590453014799 | -0.01260700553182665 | 0.043206319639979014 | 32 | 0.3131137117195273 | 0.2113527801224202 | standard | -0.4127830254166533 | perceived_ease_of_use | 0.19442843837990556 |
-| behavioral_intention | behavioral_intention_z | -0.2994281930925104 | -0.9593954303725791 | 0.3605390441875583 | 0.3738747542699479 | 32 | 0.23961983010320909 | 0.12697091604442523 | standard | -0.2994281930925104 | behavioral_intention | 0.6729745576859061 |
-| hedonic_motivation | hedonic_motivation_z | 0.036658509591454086 | -0.2749541594095347 | 0.3482711785924429 | 0.8176468180995744 | 32 | 0.1763543585171996 | 0.05433278200122915 | standard | 0.036658509591454086 | hedonic_motivation | 0.8349261363266525 |
-| locus_of_control | locus_of_control_z | -0.5430931694238887 | -0.9618843343515064 | -0.12430200449627113 | 0.01103136462389088 | 32 | 0.4083688637927061 | 0.32071980657681065 | standard | -0.5430931694238887 | locus_of_control | 0.09928228161501793 |
-| facilitating_conditions | facilitating_conditions_z | -0.12403484224231792 | -0.5241528161798887 | 0.27608313169525284 | 0.5434658284230907 | 32 | 0.18302036845140046 | 0.06198634896271904 | standard | -0.12403484224231792 | facilitating_conditions | 0.6987417794011165 |
-| social_influence | social_influence_z | -0.12226964971234355 | -0.4879385145048626 | 0.24339921508017548 | 0.512237120721269 | 32 | 0.18731473636822338 | 0.06691691953388612 | standard | -0.12226964971234355 | social_influence | 0.6987417794011165 |
-| attitude | attitude_z | -0.07856930703060294 | -0.8175423629416834 | 0.6604037488804775 | 0.8349261363266525 | 32 | 0.17974617488151845 | 0.05822708967878043 | standard | -0.07856930703060294 | attitude | 0.8349261363266525 |
+Survey reliability:
+
+| dimension | n_items | cronbach_alpha |
+| --- | --- | --- |
+| perceived_usefulness | 4 | 0.8296698773359676 |
+| perceived_ease_of_use | 6 | 0.7836627470602953 |
+| behavioral_intention | 3 | 0.9722351843210452 |
+| hedonic_motivation | 3 | 0.8841718322041228 |
+| locus_of_control | 4 | 0.6506311418116029 |
+| trust | 6 | 0.5862857142857142 |
+| facilitating_conditions | 1 | nan |
+| social_influence | 1 | nan |
+| attitude | 3 | 0.9132081426542527 |
+
+| model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | std_beta | std_ci_low | std_ci_high | dimension | fdr_p_value |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| trust | trust_z | -0.17473323046590616 | -0.47356069868393774 | 0.12409423775212541 | 0.25177499222476596 | 45 | 0.17705024426346105 | 0.0947552686898071 | standard | -0.20199895869920104 | -0.5474560720932038 | 0.14345815469480178 | trust | 0.5664937325057234 |
+| perceived_usefulness | perceived_usefulness_z | -0.2097874991397451 | -0.5427910475891986 | 0.12321604930970842 | 0.21692377205748303 | 45 | 0.1766924973420756 | 0.09436174707628309 | standard | -0.24252316666580823 | -0.627489265275503 | 0.14244293194388652 | perceived_usefulness | 0.5664937325057234 |
+| perceived_ease_of_use | perceived_ease_of_use_z | -0.2584649246669142 | -0.541268750109 | 0.024338900775171646 | 0.07324774599539671 | 45 | 0.21855347668452274 | 0.14040882435297497 | standard | -0.2987963165550883 | -0.6257294254041138 | 0.028136792293937132 | perceived_ease_of_use | 0.3296148569792852 |
+| behavioral_intention | behavioral_intention_z | -0.1573621218418239 | -0.605663108871215 | 0.2909388651875672 | 0.49146259712525286 | 45 | 0.16242595833639517 | 0.0786685541700346 | standard | -0.18191722699791488 | -0.7001720107176626 | 0.3363375567218328 | behavioral_intention | 0.6699204789541362 |
+| hedonic_motivation | hedonic_motivation_z | -0.060642334325163694 | -0.29113831864445183 | 0.16985364999412442 | 0.6060942241955865 | 45 | 0.14223012037051275 | 0.056453132407564 | standard | -0.07010508736151383 | -0.3365681333012976 | 0.19635795857826988 | hedonic_motivation | 0.6699204789541362 |
+| locus_of_control | locus_of_control_z | -0.4828225881505007 | -0.7337061272943268 | -0.2319390490066746 | 0.00016199038910304968 | 45 | 0.4320295281782247 | 0.3752324809960471 | standard | -0.558163205606642 | -0.8481951218408664 | -0.26813128937241765 | locus_of_control | 0.001457913501927447 |
+| facilitating_conditions | facilitating_conditions_z | -0.06518511326534832 | -0.30619938244348494 | 0.1758291559127883 | 0.5960460215452924 | 45 | 0.14176869509182133 | 0.05594556460100342 | standard | -0.07535673075568208 | -0.3539793560904312 | 0.20326589457906702 | facilitating_conditions | 0.6699204789541362 |
+| social_influence | social_influence_z | -0.08413418370396458 | -0.38668449387171816 | 0.218416126463789 | 0.5857306697920943 | 45 | 0.14639940326289858 | 0.06103934358918839 | standard | -0.0972626526384985 | -0.44702352780260307 | 0.25249822252560605 | social_influence | 0.6699204789541362 |
+| attitude | attitude_z | -0.08503167318295145 | -0.4760140123061167 | 0.30595066594021375 | 0.6699204789541362 | 45 | 0.14557871953273427 | 0.060136591486007585 | standard | -0.09830018819893793 | -0.5502922057566252 | 0.35369182935874927 | attitude | 0.6699204789541362 |
 
 ## Secondary Pre/Post Survey Change
 
-| dimension | pre_mean | post_mean | change | ci_low | ci_high | n | phase_p_value | interaction_p_value | fdr_p_value |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| perceived_usefulness | 3.761111111111111 | 3.8444444444444446 | 0.08333333333333333 | -0.17222222222222222 | 0.3111111111111111 | 45 | 0.49654461507172737 | nan | 0.744816922607591 |
-| perceived_ease_of_use | 3.803703703703703 | 3.7888888888888896 | -0.01481481481481482 | -0.24074074074074067 | 0.174074074074074 | 45 | 0.8896729998916534 | nan | 0.9264640142943755 |
-| behavioral_intention | 3.8592592592592596 | 3.977777777777778 | 0.11851851851851854 | -0.177962962962963 | 0.38537037037037025 | 45 | 0.435597692267614 | nan | 0.744816922607591 |
-| hedonic_motivation | 3.7851851851851843 | 3.6962962962962957 | -0.08888888888888889 | -0.3703703703703703 | 0.126111111111111 | 45 | 0.4901935624488351 | nan | 0.744816922607591 |
-| locus_of_control | 3.088888888888889 | 3.077777777777778 | -0.011111111111111112 | -0.2722222222222222 | 0.2111111111111111 | 45 | 0.9264640142943756 | nan | 0.9264640142943755 |
-| trust | 3.1666666666666665 | 3.3962962962962964 | 0.22962962962962966 | 0.010925925925925927 | 0.4481481481481481 | 45 | 0.04175767529380268 | nan | 0.3758190776442241 |
-| facilitating_conditions | 3.933333333333333 | 4.066666666666666 | 0.13333333333333333 | -0.2 | 0.4444444444444444 | 45 | 0.40221799249071205 | nan | 0.744816922607591 |
-| social_influence | 3.2888888888888888 | 3.511111111111111 | 0.2222222222222222 | -0.13388888888888886 | 0.6 | 45 | 0.2361411829906664 | nan | 0.744816922607591 |
-| attitude | 3.8962962962962964 | 3.837037037037036 | -0.05925925925925925 | -0.2668518518518519 | 0.12592592592592594 | 45 | 0.5830141762339018 | nan | 0.7495896551578738 |
+| dimension | analysis_type | pre_mean | post_mean | change | ci_low | ci_high | n | phase_p_value | interaction_p_value | fdr_p_value |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| perceived_usefulness | mixed_model | 3.761111111111111 | 3.8444444444444446 | 0.08333333333333333 | -0.17222222222222222 | 0.3111111111111111 | 45 | 0.5458249068939554 | 0.6254588375761287 | 0.7017748802922282 |
+| perceived_ease_of_use | mixed_model | 3.803703703703703 | 3.7888888888888896 | -0.01481481481481482 | -0.24074074074074067 | 0.174074074074074 | 45 | 0.41939578608015293 | 0.41939578608015293 | 0.7017748802922282 |
+| behavioral_intention | mixed_model | 3.8592592592592596 | 3.977777777777778 | 0.11851851851851854 | -0.177962962962963 | 0.38537037037037025 | 45 | 0.7102265982529943 | 0.7631336740375199 | 0.7431207540803043 |
+| hedonic_motivation | mixed_model | 3.7851851851851843 | 3.6962962962962957 | -0.08888888888888889 | -0.3703703703703703 | 0.126111111111111 | 45 | 0.7431207540803043 | 0.8167434646681857 | 0.7431207540803043 |
+| locus_of_control | mixed_model | 3.088888888888889 | 3.077777777777778 | -0.011111111111111112 | -0.2722222222222222 | 0.2111111111111111 | 45 | 0.4885118195396083 | 0.4885118195396083 | 0.7017748802922282 |
+| trust | mixed_model | 3.1666666666666665 | 3.3962962962962964 | 0.22962962962962966 | 0.010925925925925927 | 0.4481481481481481 | 45 | 0.10541038421680092 | 0.10541038421680092 | 0.3009772101586361 |
+| facilitating_conditions | mixed_model | 3.933333333333333 | 4.066666666666666 | 0.13333333333333333 | -0.2 | 0.4444444444444444 | 45 | 0.05523396632362869 | 0.12133481100066018 | 0.2485528484563291 |
+| social_influence | mixed_model | 3.2888888888888888 | 3.511111111111111 | 0.2222222222222222 | -0.13388888888888886 | 0.6 | 45 | 0.13376764895939383 | 0.13376764895939383 | 0.3009772101586361 |
+| attitude | mixed_model | 3.8962962962962964 | 3.837037037037036 | -0.05925925925925925 | -0.2668518518518519 | 0.12592592592592594 | 45 | 0.002464603843315182 | 0.002464603843315182 | 0.022181434589836638 |
 
 ## Small-Sample Sensitivity
 
@@ -181,7 +258,7 @@ Targeted perceived-usefulness models:
 The quantitative pipeline retained 45 participants and 90 paired survey rows. Prompt analyses used 144 scored assignment observations for assignment-level models. Prompt-grade relationships were evaluated at the participant level, and the old duplicated n=90 prompt-grade p-values were not used.
 At the participant level, mean prompt quality was higher for Group C than pooled Groups A and B (mean difference=0.637, Hedges g=0.77, 95% CI for g [0.176, 1.67], n=45).
 Mean prompt quality was associated with final grade in the participant-level descriptive analysis (Pearson r=0.451, 95% CI [0.181, 0.657], p=0.00188, n=45).
-The targeted adjusted model did not support a strong participant-level negative association between pre-test perceived usefulness and final grade (standardized beta=-0.0298, 95% CI [-0.464, 0.405], p=0.893, n=32).
+The targeted adjusted model did not support a strong participant-level negative association between pre-test perceived usefulness and final grade (standardized beta=-0.071, 95% CI [-0.373, 0.231], p=0.645, n=45).
 Small-sample sensitivity indicates that the study is powered only for relatively large effects (approximate 80% detectable d for A vs B=1.1).
 
 ## Files Generated
@@ -192,6 +269,7 @@ Small-sample sensitivity indicates that the study is powered only for relatively
 - `table_prompt_trajectory_model.csv`
 - `table_prompt_trajectory_estimated_means.csv`
 - `table_participant_training_contrasts.csv`
+- `table_participant_training_tests.csv`
 - `table_learning_outcome_models.csv`
 - `table_prompt_grade_correlations.csv`
 - `table_calibration_models.csv`
@@ -199,6 +277,11 @@ Small-sample sensitivity indicates that the study is powered only for relatively
 - `table_prepost_survey_change.csv`
 - `table_small_sample_sensitivity.csv`
 - `table_perceived_usefulness_models.csv`
+- `table_complete_case_diagnostics.csv`
+- `table_prior_use_mapping.csv`
+- `table_scored_assignment_distribution_by_group.csv`
+- `table_prompt_sensitivity_min3_assignments.csv`
+- `table_prompt_sensitivity_all4_assignments.csv`
 - `fig_prompt_quality_trajectory.pdf`
 - `fig_prompt_quality_trajectory.png`
 - `fig_prompt_quality_learning_outcome.pdf`

@@ -1,4 +1,7 @@
 metric,observed,expected,status
+group_count_A,13,13,pass
+group_count_B,13,13,pass
+group_count_C,19,19,pass
 missing_prompt_scores,36,36,pass
 post_responses,45,45,pass
 pre_responses,55,55,pass

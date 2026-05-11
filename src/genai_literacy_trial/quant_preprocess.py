@@ -98,7 +98,10 @@ def build_assignment_prompt_table(prompts: pd.DataFrame, grades_or_participants:
     df = prompts.drop(columns=transcript_cols).copy()
     df["participant_key"] = df[c.id].map(participant_key)
     df = df.rename(columns={c.assignment: "assignment", c.prompt_score: "prompt_score"})
-    participants = grades_or_participants[["participant_key", "group"]].drop_duplicates()
+    participants_source = grades_or_participants.copy()
+    if "group" not in participants_source.columns and "group_x" in participants_source.columns:
+        participants_source = participants_source.rename(columns={"group_x": "group"})
+    participants = participants_source[["participant_key", "group"]].drop_duplicates()
     out = df[["participant_key", "assignment", "prompt_score"]].merge(participants, on="participant_key", how="inner")
     return out[["participant_key", "group", "assignment", "prompt_score"]].copy()
 
@@ -111,7 +114,10 @@ def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig
     c = config.columns
     rows = retained_survey.copy()
     rows["participant_key"] = rows[c.id].map(participant_key)
-    out = rows[["participant_key", c.phase]].rename(columns={c.phase: "phase"}).copy()
+    base_cols = ["participant_key", c.phase]
+    if c.group in rows.columns:
+        base_cols.append(c.group)
+    out = rows[base_cols].rename(columns={c.phase: "phase", c.group: "group"}).copy()
     out["phase"] = out["phase"].replace({config.pre_label: "pre", config.post_label: "post"})
     for dimension, items in config.survey_dimensions.items():
         existing = [item for item in items if item in rows.columns]
@@ -131,6 +137,32 @@ def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig
     if prior in rows.columns:
         out["prior_chatgpt_use_score"] = rows[prior].map(config.likert_mapping).fillna(pd.to_numeric(rows[prior], errors="coerce"))
     return out
+
+
+def prior_use_mapping_table(retained_survey: pd.DataFrame, config: QuantConfig, min_count: int | None = None) -> pd.DataFrame:
+    c = config.columns
+    if c.prior_chatgpt_use not in retained_survey.columns:
+        return pd.DataFrame(columns=["prior_chatgpt_use", "n", "mapped_score", "mapped_status"])
+    pre = retained_survey[retained_survey[c.phase] == config.pre_label].copy()
+    rows = []
+    for category, part in pre.groupby(c.prior_chatgpt_use, dropna=False, sort=True):
+        raw = category if not pd.isna(category) else ""
+        mapped = config.likert_mapping.get(str(raw))
+        if mapped is None:
+            numeric = pd.to_numeric(pd.Series([raw]), errors="coerce").iloc[0]
+            mapped = None if pd.isna(numeric) else float(numeric)
+        count: int | str = int(len(part))
+        if min_count is not None and count < min_count:
+            count = "suppressed"
+        rows.append(
+            {
+                "prior_chatgpt_use": str(raw),
+                "n": count,
+                "mapped_score": mapped,
+                "mapped_status": "mapped" if mapped is not None else "unmapped",
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFrame, retained_survey: pd.DataFrame, config: QuantConfig, expected: dict[str, Any] | None = None) -> pd.DataFrame:
@@ -164,9 +196,13 @@ def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFr
         "scored_prompt_observations": int(assignment["prompt_score"].notna().sum()),
         "missing_prompt_scores": int(assignment["prompt_score"].isna().sum()),
     }
+    for group, count in participant["group"].value_counts().sort_index().items():
+        observed[f"group_count_{group}"] = int(count)
     rows = []
     for metric, value in observed.items():
         exp = None if not expected else expected.get(metric)
+        if exp is None and expected and metric.startswith("group_count_"):
+            exp = expected.get("group_counts", {}).get(metric.removeprefix("group_count_"))
         status = "pass" if exp is None or int(exp) == value else "fail"
         if status == "fail":
             raise ValueError(f"Inventory mismatch for {metric}: observed {value}, expected {exp}")
@@ -174,11 +210,28 @@ def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFr
     return pd.DataFrame(rows)
 
 
-def suppress_small_cells(table: pd.DataFrame, count_col: str = "n", min_count: int = 5) -> pd.DataFrame:
+def suppress_small_cells(table: pd.DataFrame, count_col: str = "n", min_count: int = 5, category_col: str | None = None) -> pd.DataFrame:
     out = table.copy()
-    if count_col in out.columns:
-        mask = out[count_col].fillna(0).astype(float) < min_count
-        for col in out.columns:
-            if col != count_col:
-                out.loc[mask, col] = "suppressed"
-    return out
+    if count_col not in out.columns:
+        return out
+    counts = pd.to_numeric(out[count_col], errors="coerce")
+    mask = counts.fillna(0) < min_count
+    if category_col is None:
+        candidates = [col for col in out.columns if col not in {"metric", "group", count_col}]
+        category_col = candidates[-1] if candidates else None
+    if category_col is None or not mask.any():
+        return out
+    safe = out.loc[~mask].copy()
+    collapsed = []
+    group_cols = [col for col in ["metric", "group"] if col in out.columns]
+    for keys, part in out.loc[mask].groupby(group_cols, dropna=False, sort=True) if group_cols else [((), out.loc[mask])]:
+        row = {col: "" for col in out.columns}
+        if group_cols:
+            if not isinstance(keys, tuple):
+                keys = (keys,)
+            for col, value in zip(group_cols, keys, strict=True):
+                row[col] = value
+        row[category_col] = "Other/suppressed"
+        row[count_col] = "suppressed"
+        collapsed.append(row)
+    return pd.concat([safe, pd.DataFrame(collapsed)], ignore_index=True)

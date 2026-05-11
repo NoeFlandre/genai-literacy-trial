@@ -44,7 +44,7 @@ def plot_calibration_forest(table: pd.DataFrame, output_dir: Path) -> list[Path]
     fig, ax = plt.subplots(figsize=(5.2, max(3.2, 0.35 * len(table))))
     plot = table.sort_values("std_beta").reset_index(drop=True)
     y = range(len(plot))
-    ax.errorbar(plot["std_beta"], y, xerr=[plot["std_beta"] - plot["ci_low"], plot["ci_high"] - plot["std_beta"]], fmt="o", color="black")
+    ax.errorbar(plot["std_beta"], y, xerr=[plot["std_beta"] - plot["std_ci_low"], plot["std_ci_high"] - plot["std_beta"]], fmt="o", color="black")
     ax.axvline(0, color="0.5", linewidth=1)
     ax.set_yticks(list(y), plot["dimension"])
     ax.set_xlabel("Standardized coefficient")

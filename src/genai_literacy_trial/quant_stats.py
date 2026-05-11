@@ -37,8 +37,21 @@ def welch_anova(df: pd.DataFrame, group_col: str, value_col: str) -> dict[str, f
     groups = [g for g in groups if len(g)]
     if len(groups) < 2:
         return {"statistic": math.nan, "p_value": math.nan}
-    res = stats.f_oneway(*groups, equal_var=False)
-    return {"statistic": float(res.statistic), "p_value": float(res.pvalue)}
+    means = np.array([g.mean() for g in groups])
+    variances = np.array([g.var(ddof=1) for g in groups])
+    ns = np.array([len(g) for g in groups], dtype=float)
+    if np.any(ns < 2) or np.any(variances == 0):
+        res = stats.f_oneway(*groups)
+        return {"statistic": float(res.statistic), "p_value": float(res.pvalue)}
+    weights = ns / variances
+    weighted_mean = np.sum(weights * means) / np.sum(weights)
+    k = len(groups)
+    numerator = np.sum(weights * (means - weighted_mean) ** 2) / (k - 1)
+    correction = 1 + (2 * (k - 2) / (k**2 - 1)) * np.sum((1 / (ns - 1)) * (1 - weights / np.sum(weights)) ** 2)
+    statistic = numerator / correction
+    df_num = k - 1
+    df_den = (k**2 - 1) / (3 * np.sum((1 / (ns - 1)) * (1 - weights / np.sum(weights)) ** 2))
+    return {"statistic": float(statistic), "p_value": float(stats.f.sf(statistic, df_num, df_den))}
 
 
 def kruskal_test(df: pd.DataFrame, group_col: str, value_col: str) -> dict[str, float]:

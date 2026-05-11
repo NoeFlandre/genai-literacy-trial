@@ -81,7 +81,7 @@ def _manuscript_paragraphs(tables: dict[str, pd.DataFrame]) -> list[str]:
         lines.append(
             "At the participant level, mean prompt quality was higher for Group C than pooled Groups A and B "
             f"(mean difference={_fmt(c_pooled['mean_difference'])}, Hedges g={_fmt(c_pooled['hedges_g'])}, "
-            f"95% CI for g [{_fmt(c_pooled['ci_low'])}, {_fmt(c_pooled['ci_high'])}], n={_fmt(c_pooled['n'], 0)})."
+            f"95% CI for g [{_fmt(c_pooled['hedges_g_ci_low'])}, {_fmt(c_pooled['hedges_g_ci_high'])}], n={_fmt(c_pooled['n'], 0)})."
         )
     if final_corr is not None:
         corr_value = final_corr["correlation"] if "correlation" in final_corr.index else final_corr.get("estimate")
@@ -93,7 +93,7 @@ def _manuscript_paragraphs(tables: dict[str, pd.DataFrame]) -> list[str]:
     if usefulness_final is not None:
         lines.append(
             "The targeted adjusted model did not support a strong participant-level negative association between pre-test perceived usefulness and final grade "
-            f"(standardized beta={_fmt(usefulness_final['std_beta'])}, 95% CI [{_fmt(usefulness_final['ci_low'])}, {_fmt(usefulness_final['ci_high'])}], "
+            f"(standardized beta={_fmt(usefulness_final['std_beta'])}, 95% CI [{_fmt(usefulness_final['std_ci_low'])}, {_fmt(usefulness_final['std_ci_high'])}], "
             f"p={_fmt(usefulness_final['p_value'])}, n={_fmt(usefulness_final['n'], 0)})."
         )
     if detect_d is not None:
@@ -135,8 +135,23 @@ def write_quantitative_report(tables: dict[str, pd.DataFrame], output_dir: Path,
             lines += [_md_table(corr), ""]
             learning_models = tables.get("table_learning_outcome_models", pd.DataFrame())
             lines += ["Adjusted learning-outcome models:", "", _md_table(learning_models), ""]
+            diagnostics = tables.get("table_complete_case_diagnostics", pd.DataFrame())
+            lines += ["Complete-case diagnostics; loss columns are marginal and non-additive:", "", _md_table(diagnostics), ""]
+            prior_mapping = tables.get("table_prior_use_mapping", pd.DataFrame())
+            lines += ["Prior ChatGPT-use coding:", "", _md_table(prior_mapping), ""]
             usefulness = tables.get("table_perceived_usefulness_models", pd.DataFrame())
             lines += ["Targeted perceived-usefulness models:", "", _md_table(usefulness), ""]
+        elif section == "Participant-Level Robustness":
+            contrasts = tables.get("table_participant_training_contrasts", pd.DataFrame())
+            tests = tables.get("table_participant_training_tests", pd.DataFrame())
+            min3 = tables.get("table_prompt_sensitivity_min3_assignments", pd.DataFrame())
+            all4 = tables.get("table_prompt_sensitivity_all4_assignments", pd.DataFrame())
+            scored = tables.get("table_scored_assignment_distribution_by_group", pd.DataFrame())
+            lines += [_md_table(contrasts), "", "Omnibus training-effect tests:", "", _md_table(tests), "", "Scored assignment distribution by group:", "", _md_table(scored), "", "Missing-prompt sensitivity, at least three scored assignments:", "", _md_table(min3), "", "Missing-prompt sensitivity, all four scored assignments:", "", _md_table(all4), ""]
+        elif section == "Calibration: Beliefs vs Actual Prompt Skill":
+            reliability = tables.get("table_survey_reliability", pd.DataFrame())
+            calibration = tables.get("table_calibration_models", pd.DataFrame())
+            lines += ["Survey reliability:", "", _md_table(reliability), "", _md_table(calibration), ""]
         elif section == "Files Generated":
             lines += ["\n".join(f"- `{name}`" for name in generated_files), ""]
         elif section == "Privacy Verification":

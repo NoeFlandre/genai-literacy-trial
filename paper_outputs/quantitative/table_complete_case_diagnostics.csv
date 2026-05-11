@@ -1,0 +1,14 @@
+model,starting_n,final_n,loss_type,lost_final_grade,lost_midterm_grade,lost_mean_prompt_score,lost_prior_chatgpt_use_score,lost_survey_composite,lost_group
+final_points,45,45,marginal_non_additive,0,0,0,0,0,0
+grade_change,45,45,marginal_non_additive,0,0,0,0,0,0
+perceived_usefulness_final_points,45,45,marginal_non_additive,0,0,0,0,0,0
+perceived_usefulness_grade_change,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_trust,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_perceived_usefulness,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_perceived_ease_of_use,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_behavioral_intention,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_hedonic_motivation,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_locus_of_control,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_facilitating_conditions,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_social_influence,45,45,marginal_non_additive,0,0,0,0,0,0
+calibration_attitude,45,45,marginal_non_additive,0,0,0,0,0,0
