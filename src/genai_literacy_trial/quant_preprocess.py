@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
 
@@ -40,6 +40,19 @@ def _map_grade(series: pd.Series, config: QuantConfig, column: str) -> pd.Series
     if bad:
         raise ValueError(f"Unmapped letter grades in {column}: {bad}")
     return mapped
+
+
+def _map_configured_numeric(series: pd.Series, mapping: Mapping[str, float]) -> pd.Series:
+    return pd.to_numeric(series.replace(mapping), errors="coerce")
+
+
+def _map_configured_scalar(value: object, mapping: Mapping[str, float]) -> float | None:
+    raw = "" if pd.isna(value) else value
+    mapped = mapping.get(str(raw))
+    if mapped is not None:
+        return mapped
+    numeric = pd.to_numeric(pd.Series([raw]), errors="coerce").iloc[0]
+    return None if pd.isna(numeric) else float(numeric)
 
 
 def build_participant_table(survey: pd.DataFrame, grades: pd.DataFrame, prompts: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
@@ -107,7 +120,7 @@ def build_assignment_prompt_table(prompts: pd.DataFrame, grades_or_participants:
 
 
 def _likert(frame: pd.DataFrame, columns: list[str], config: QuantConfig) -> pd.DataFrame:
-    return frame[columns].replace(config.likert_mapping).apply(pd.to_numeric, errors="coerce")
+    return frame[columns].apply(_map_configured_numeric, mapping=config.likert_mapping)
 
 
 def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
@@ -135,7 +148,7 @@ def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig
         out[f"{dimension}_items_present"] = present
     prior = c.prior_chatgpt_use
     if prior in rows.columns:
-        out["prior_chatgpt_use_score"] = rows[prior].map(config.likert_mapping).fillna(pd.to_numeric(rows[prior], errors="coerce"))
+        out["prior_chatgpt_use_score"] = _map_configured_numeric(rows[prior], config.likert_mapping)
     return out
 
 
@@ -147,10 +160,7 @@ def prior_use_mapping_table(retained_survey: pd.DataFrame, config: QuantConfig, 
     rows = []
     for category, part in pre.groupby(c.prior_chatgpt_use, dropna=False, sort=True):
         raw = category if not pd.isna(category) else ""
-        mapped = config.likert_mapping.get(str(raw))
-        if mapped is None:
-            numeric = pd.to_numeric(pd.Series([raw]), errors="coerce").iloc[0]
-            mapped = None if pd.isna(numeric) else float(numeric)
+        mapped = _map_configured_scalar(raw, config.likert_mapping)
         count: int | str = int(len(part))
         if min_count is not None and count < min_count:
             count = "suppressed"

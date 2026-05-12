@@ -11,6 +11,7 @@ from genai_literacy_trial.quant_preprocess import (
     build_assignment_prompt_table,
     build_participant_table,
     compute_survey_composites,
+    participant_key,
     prior_use_mapping_table,
     prepare_retained_survey,
     suppress_small_cells,
@@ -51,6 +52,68 @@ def test_survey_composites_reverse_code_and_require_half_items() -> None:
     assert pre["perceived_usefulness"] >= 3
     assert math.isclose(pre["locus_of_control"], 4.0)
     assert "locus_of_control_items_present" in composites.columns
+
+
+def test_likert_scoring_accepts_text_and_numeric_strings_and_reverse_codes() -> None:
+    config = QuantConfig(
+        survey_dimensions={"perceived_usefulness": ["useful_1", "useful_2"], "locus_of_control": ["control_1", "control_reverse"]},
+        reverse_coded_items={"locus_of_control": ["control_reverse"]},
+    )
+    retained_survey = pd.DataFrame(
+        {
+            "participant_id": ["p01", "p02"],
+            "phase": [config.pre_label, config.pre_label],
+            "group": ["A", "B"],
+            "useful_1": ["Agree", "Neutral"],
+            "useful_2": ["3", "4"],
+            "control_1": ["Disagree", "5"],
+            "control_reverse": ["5", "2"],
+        }
+    )
+
+    composites = compute_survey_composites(retained_survey, config)
+
+    pre_a = composites.iloc[0]
+    pre_b = composites.iloc[1]
+    assert math.isclose(pre_a["perceived_usefulness"], 3.5)
+    assert math.isclose(pre_b["perceived_usefulness"], 3.5)
+    assert math.isclose(pre_a["locus_of_control"], 1.5)
+    assert math.isclose(pre_b["locus_of_control"], (5.0 + 4.0) / 2.0)
+
+
+def test_prior_chatgpt_use_scores_agree_with_mapping_table_for_mapped_and_numeric_values() -> None:
+    config = QuantConfig.default()
+    retained_survey = pd.DataFrame(
+        {
+            "participant_id": ["p01", "p02", "p03"],
+            "phase": [config.pre_label, config.pre_label, config.pre_label],
+            "group": ["A", "B", "C"],
+            "prior_chatgpt_use": ["low", "3", "4.0"],
+            "useful_1": ["Agree", "Agree", "Agree"],
+            "useful_2": ["Agree", "Agree", "Agree"],
+            "control_1": ["Agree", "Agree", "Agree"],
+            "control_reverse": ["Agree", "Agree", "Agree"],
+        }
+    )
+
+    composites = compute_survey_composites(retained_survey, config)
+    mapping = prior_use_mapping_table(retained_survey, config)
+    map_lookup = dict(zip(mapping["prior_chatgpt_use"], mapping["mapped_score"], strict=True))
+
+    merged = (
+        retained_survey.assign(participant_key=retained_survey["participant_id"].map(participant_key))
+        .merge(composites[["participant_key", "prior_chatgpt_use_score"]], on="participant_key", how="left")
+        .merge(mapping, on="prior_chatgpt_use", how="left", suffixes=("", "_from_map"))
+    )
+
+    for _, row in merged.iterrows():
+        assert pd.isna(row["mapped_score"]) == pd.isna(row["prior_chatgpt_use_score"])
+        if pd.isna(row["mapped_score"]):
+            continue
+        assert row["prior_chatgpt_use_score"] == row["mapped_score"]
+    assert map_lookup["low"] == 1.0
+    assert map_lookup["3"] == 3.0
+    assert map_lookup["4.0"] == 4.0
 
 
 def test_reliability_reverse_codes_items_before_alpha() -> None:
@@ -133,6 +196,10 @@ def test_prior_use_mapping_table_flags_unmapped_categories() -> None:
     mapping = prior_use_mapping_table(retained, config)
 
     assert set(mapping["mapped_status"]) == {"unmapped"}
+
+    unmapped = mapping.loc[mapping["prior_chatgpt_use"] == "unknown category"].iloc[0]
+    assert unmapped["mapped_status"] == "unmapped"
+    assert pd.isna(unmapped["mapped_score"])
 
 
 def test_small_cell_suppression_collapses_and_hides_exact_counts() -> None:
