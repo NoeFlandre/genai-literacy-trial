@@ -61,11 +61,48 @@ def _tidy_result(result, model_name: str, n: int, adjusted_r2: float | None = No
     return pd.DataFrame(rows)
 
 
-def _scale_term_ci(row: pd.Series, scale: float) -> pd.Series:
-    out = row.copy()
-    out["std_beta"] = float(out["estimate"] * scale)
-    out["std_ci_low"] = float(out["ci_low"] * scale)
-    out["std_ci_high"] = float(out["ci_high"] * scale)
+def _ensure_prior_use_score(frame: pd.DataFrame) -> pd.DataFrame:
+    out = frame.copy()
+    if "prior_chatgpt_use_score" not in out.columns:
+        out["prior_chatgpt_use_score"] = pd.to_numeric(out.get("prior_chatgpt_use", np.nan), errors="coerce")
+    return out
+
+
+def _complete_cases(frame: pd.DataFrame, required: list[str]) -> pd.DataFrame:
+    return frame.dropna(subset=required).copy()
+
+
+def _fit_ols_hc3(formula: str, data: pd.DataFrame):
+    return smf.ols(formula, data=data).fit(cov_type="HC3")
+
+
+def _add_standardized_effect(
+    tidy: pd.DataFrame,
+    work: pd.DataFrame,
+    term: str,
+    outcome: str,
+    *,
+    from_standardized_predictor: bool,
+    include_ci: bool,
+) -> pd.DataFrame:
+    if term not in tidy["term"].to_numpy():
+        return tidy
+    out = tidy.copy()
+    y_sd = work[outcome].std(ddof=1)
+    if not y_sd or not np.isfinite(y_sd):
+        return out
+    if from_standardized_predictor:
+        scale = 1.0 / y_sd
+    else:
+        x_sd = work[term].std(ddof=1)
+        if not x_sd or not np.isfinite(x_sd):
+            return out
+        scale = x_sd / y_sd
+    mask = out["term"] == term
+    out.loc[mask, "std_beta"] = out.loc[mask, "estimate"] * scale
+    if include_ci:
+        out.loc[mask, "std_ci_low"] = out.loc[mask, "ci_low"] * scale
+        out.loc[mask, "std_ci_high"] = out.loc[mask, "ci_high"] * scale
     return out
 
 
@@ -174,6 +211,7 @@ def participant_level_training_effect(participant_df: pd.DataFrame) -> dict[str,
 
 def learning_outcome_models(participant_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
     frame = _canonical_group(participant_df)
+    frame = _ensure_prior_use_score(frame)
     corrs = []
     for outcome in ["midterm_points", "final_points"]:
         pearson = pearson_with_fisher_ci(frame["mean_prompt_score"], frame[outcome])
@@ -181,26 +219,33 @@ def learning_outcome_models(participant_df: pd.DataFrame) -> dict[str, pd.DataFr
         corrs.append({"metric": f"mean_prompt_score vs {outcome}", "method": "pearson", **pearson})
         corrs.append({"metric": f"mean_prompt_score vs {outcome}", "method": "spearman", **spearman})
     models = []
-    work = frame.dropna(subset=["final_points", "mean_prompt_score", "midterm_points"]).copy()
-    if "prior_chatgpt_use_score" not in work.columns:
-        work["prior_chatgpt_use_score"] = pd.to_numeric(work.get("prior_chatgpt_use", np.nan), errors="coerce")
+    work = _complete_cases(frame, ["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
     formula = "final_points ~ mean_prompt_score + midterm_points + group + prior_chatgpt_use_score"
-    result = smf.ols(formula, data=work).fit(cov_type="HC3")
+    result = _fit_ols_hc3(formula, work)
     tidy = _tidy_result(result, "final_points", int(result.nobs))
-    y_sd = work["final_points"].std(ddof=1)
-    for term in ["mean_prompt_score", "midterm_points", "prior_chatgpt_use_score"]:
-        if term in tidy["term"].to_numpy() and y_sd and np.isfinite(y_sd):
-            scale = work[term].std(ddof=1) / y_sd
-            tidy.loc[tidy["term"] == term, "std_beta"] = tidy.loc[tidy["term"] == term, "estimate"] * scale
+    tidy = _add_standardized_effect(tidy, work, "mean_prompt_score", "final_points", from_standardized_predictor=False, include_ci=False)
+    tidy = _add_standardized_effect(tidy, work, "midterm_points", "final_points", from_standardized_predictor=False, include_ci=False)
+    tidy = _add_standardized_effect(
+        tidy,
+        work,
+        "prior_chatgpt_use_score",
+        "final_points",
+        from_standardized_predictor=False,
+        include_ci=False,
+    )
     models.append(tidy)
     work["grade_change"] = work["final_points"] - work["midterm_points"]
-    result2 = smf.ols("grade_change ~ mean_prompt_score + group + prior_chatgpt_use_score", data=work).fit(cov_type="HC3")
+    result2 = _fit_ols_hc3("grade_change ~ mean_prompt_score + group + prior_chatgpt_use_score", work)
     tidy2 = _tidy_result(result2, "grade_change", int(result2.nobs))
-    y_sd = work["grade_change"].std(ddof=1)
-    for term in ["mean_prompt_score", "prior_chatgpt_use_score"]:
-        if term in tidy2["term"].to_numpy() and y_sd and np.isfinite(y_sd):
-            scale = work[term].std(ddof=1) / y_sd
-            tidy2.loc[tidy2["term"] == term, "std_beta"] = tidy2.loc[tidy2["term"] == term, "estimate"] * scale
+    tidy2 = _add_standardized_effect(tidy2, work, "mean_prompt_score", "grade_change", from_standardized_predictor=False, include_ci=False)
+    tidy2 = _add_standardized_effect(
+        tidy2,
+        work,
+        "prior_chatgpt_use_score",
+        "grade_change",
+        from_standardized_predictor=False,
+        include_ci=False,
+    )
     models.append(tidy2)
     return {"correlations": pd.DataFrame(corrs), "models": pd.concat(models, ignore_index=True)}
 
@@ -227,8 +272,7 @@ def complete_case_diagnostics(participant_df: pd.DataFrame) -> pd.DataFrame:
 def perceived_usefulness_models(participant_df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     frame = _canonical_group(participant_df)
-    if "prior_chatgpt_use_score" not in frame.columns:
-        frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
+    frame = _ensure_prior_use_score(frame)
     for model_name, formula in [
         ("final_points", "final_points ~ perceived_usefulness + midterm_points + group + prior_chatgpt_use_score"),
         ("grade_change", "grade_change ~ perceived_usefulness + group + prior_chatgpt_use_score"),
@@ -240,15 +284,20 @@ def perceived_usefulness_models(participant_df: pd.DataFrame) -> pd.DataFrame:
             needed.append("midterm_points")
         else:
             needed.append("grade_change")
-        work = work.dropna(subset=needed).copy()
+        work = _complete_cases(work, needed)
         work["perceived_usefulness_z"] = standardize_series(work["perceived_usefulness"])
         formula_z = formula.replace("perceived_usefulness", "perceived_usefulness_z")
-        result = smf.ols(formula_z, data=work).fit(cov_type="HC3")
+        result = _fit_ols_hc3(formula_z, work)
         tidy = _tidy_result(result, model_name, int(result.nobs))
         row = tidy[tidy["term"] == "perceived_usefulness_z"].copy()
-        y_sd = work[model_name].std(ddof=1)
-        if y_sd and np.isfinite(y_sd):
-            row = row.apply(lambda r: _scale_term_ci(r, 1 / y_sd), axis=1)
+        row = _add_standardized_effect(
+            row,
+            work,
+            "perceived_usefulness_z",
+            model_name,
+            from_standardized_predictor=True,
+            include_ci=True,
+        )
         rows.append(row)
     return pd.concat(rows, ignore_index=True)
 
@@ -260,19 +309,23 @@ def calibration_models(participant_df: pd.DataFrame) -> pd.DataFrame:
     ]
     rows = []
     frame = _canonical_group(participant_df)
-    if "prior_chatgpt_use_score" not in frame.columns:
-        frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
+    frame = _ensure_prior_use_score(frame)
     for dim in dimensions:
         if dim not in frame.columns:
             continue
-        work = frame.dropna(subset=["mean_prompt_score", dim, "group", "prior_chatgpt_use_score"]).copy()
+        work = _complete_cases(frame, ["mean_prompt_score", dim, "group", "prior_chatgpt_use_score"])
         work[f"{dim}_z"] = standardize_series(work[dim])
-        result = smf.ols(f"mean_prompt_score ~ {dim}_z + group + prior_chatgpt_use_score", data=work).fit(cov_type="HC3")
+        result = _fit_ols_hc3(f"mean_prompt_score ~ {dim}_z + group + prior_chatgpt_use_score", work)
         tidy = _tidy_result(result, dim, int(result.nobs))
         row = tidy[tidy["term"] == f"{dim}_z"].copy()
-        y_sd = work["mean_prompt_score"].std(ddof=1)
-        if y_sd and np.isfinite(y_sd):
-            row = row.apply(lambda r: _scale_term_ci(r, 1 / y_sd), axis=1)
+        row = _add_standardized_effect(
+            row,
+            work,
+            f"{dim}_z",
+            "mean_prompt_score",
+            from_standardized_predictor=True,
+            include_ci=True,
+        )
         row["dimension"] = dim
         rows.append(row)
     out = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
@@ -324,19 +377,19 @@ def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
 
 def prompt_missingness_sensitivity(participant_df: pd.DataFrame, min_all4_n: int = 30) -> dict[str, pd.DataFrame]:
     frame = _canonical_group(participant_df)
+    frame = _ensure_prior_use_score(frame)
     distribution = frame.groupby(["group", "scored_assignments"], dropna=False).size().reset_index(name="n").sort_values(["group", "scored_assignments"])
 
     def model_for(subset: pd.DataFrame, label: str, include_scored: bool = False) -> pd.DataFrame:
         work = subset.copy()
-        if "prior_chatgpt_use_score" not in work.columns:
-            work["prior_chatgpt_use_score"] = pd.to_numeric(work.get("prior_chatgpt_use", np.nan), errors="coerce")
+        work = _ensure_prior_use_score(work)
         terms = "mean_prompt_score + midterm_points + group + prior_chatgpt_use_score"
         if include_scored:
             terms += " + scored_assignments"
-        work = work.dropna(subset=["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
+        work = _complete_cases(work, ["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
         if len(work) < 3:
             return pd.DataFrame([{"model": label, "status": "not_run_small_n", "n": int(len(work))}])
-        result = smf.ols(f"final_points ~ {terms}", data=work).fit(cov_type="HC3")
+        result = _fit_ols_hc3(f"final_points ~ {terms}", work)
         out = _tidy_result(result, label, int(result.nobs))
         out["status"] = "run"
         return out
@@ -352,12 +405,11 @@ def prompt_missingness_sensitivity(participant_df: pd.DataFrame, min_all4_n: int
 
 def model_based_learning_prediction_table(participant_df: pd.DataFrame) -> pd.DataFrame:
     frame = _canonical_group(participant_df)
-    if "prior_chatgpt_use_score" not in frame.columns:
-        frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
-    work = frame.dropna(subset=["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"]).copy()
+    frame = _ensure_prior_use_score(frame)
+    work = _complete_cases(frame, ["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
     if work.empty or work["mean_prompt_score"].nunique() < 2:
         return pd.DataFrame({"mean_prompt_score": [], "predicted_final_points": [], "ci_low": [], "ci_high": []})
-    result = smf.ols("final_points ~ mean_prompt_score + midterm_points + group + prior_chatgpt_use_score", data=work).fit(cov_type="HC3")
+    result = _fit_ols_hc3("final_points ~ mean_prompt_score + midterm_points + group + prior_chatgpt_use_score", work)
     x = np.linspace(work["mean_prompt_score"].min(), work["mean_prompt_score"].max(), 30)
     reference = {
         "mean_prompt_score": x,
