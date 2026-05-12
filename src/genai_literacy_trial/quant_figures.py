@@ -18,14 +18,14 @@ def _save(fig, output_dir: Path, stem: str) -> list[Path]:
 
 
 def plot_prompt_quality_trajectory(table: pd.DataFrame, output_dir: Path) -> list[Path]:
-    fig, ax = plt.subplots(figsize=(4.8, 3.2))
+    fig, ax = plt.subplots(figsize=(4.8, 3.4))
     for group, part in table.groupby("group", sort=True):
         part = part.sort_values("assignment")
         ax.errorbar(part["assignment"], part["mean"], yerr=[part["mean"] - part["ci_low"], part["ci_high"] - part["mean"]], marker="o", label=str(group), linewidth=1.5)
     ax.set_xlabel("Assignment")
     ax.set_ylabel("Prompt quality")
     ax.set_ylim(1, 5)
-    ax.legend(title="Group", frameon=False)
+    ax.legend(title="Group", loc="upper center", bbox_to_anchor=(0.5, 1.28), ncol=3, frameon=False, handlelength=1.8, columnspacing=1.2)
     ax.grid(alpha=0.2)
     return _save(fig, output_dir, "fig_prompt_quality_trajectory")
 
