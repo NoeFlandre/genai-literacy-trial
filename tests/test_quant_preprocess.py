@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import numpy as np
 
 import pandas as pd
 import pytest
@@ -122,15 +123,56 @@ def test_reliability_reverse_codes_items_before_alpha() -> None:
         {
             "participant_id": ["p1", "p2", "p3", "p4"],
             "phase": ["pre", "pre", "pre", "pre"],
-            "control_1": [1, 2, 4, 5],
-            "control_reverse": [5, 4, 2, 1],
+            "control_1": ["1", "2", "3", "4"],
+            "control_reverse": ["5", "4", "3", "2"],
         }
     )
 
     reliability = _reliability(retained, config)
     locus = reliability.loc[reliability["dimension"] == "locus_of_control", "cronbach_alpha"].iloc[0]
 
-    assert locus > 0
+    assert locus == 1.0
+
+
+def test_reliability_accepts_text_and_numeric_like_lookups_consistently() -> None:
+    config = QuantConfig.default()
+    text = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p2", "p3", "p4"],
+            "phase": ["pre", "pre", "pre", "pre"],
+            "control_1": ["Strongly disagree", "Disagree", "Agree", "Strongly agree"],
+            "control_reverse": ["Strongly agree", "Agree", "Disagree", "Strongly disagree"],
+        }
+    )
+    numeric = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p2", "p3", "p4"],
+            "phase": ["pre", "pre", "pre", "pre"],
+            "control_1": ["1", "2", "4", "5"],
+            "control_reverse": ["5", "4", "2", "1"],
+        }
+    )
+
+    assert _reliability(text, config).equals(_reliability(numeric, config))
+
+
+def test_reliability_schema_and_values_unchanged_for_synthetic_fixture() -> None:
+    survey, _, _ = synthetic_quant_frames()
+    config = QuantConfig.default()
+    retained, _ = prepare_retained_survey(survey, config)
+
+    reliability = _reliability(retained, config)
+
+    assert reliability.columns.tolist() == ["dimension", "n_items", "cronbach_alpha"]
+    assert reliability.shape[0] == len(config.survey_dimensions)
+    expected = pd.DataFrame(
+        {
+            "dimension": list(config.survey_dimensions.keys()),
+            "n_items": [2, 2, 2, 1, 1, 1, 1, 1, 2],
+            "cronbach_alpha": [0.0, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
+        }
+    )
+    pd.testing.assert_frame_equal(reliability, expected)
 
 
 def test_inventory_validation_fails_on_bad_units_and_values() -> None:

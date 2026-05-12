@@ -24,6 +24,7 @@ from genai_literacy_trial.quant_preprocess import (
     build_assignment_prompt_table,
     build_participant_table,
     compute_survey_composites,
+    _map_configured_numeric,
     prior_use_mapping_table,
     prepare_retained_survey,
     suppress_small_cells,
@@ -107,7 +108,7 @@ def _reliability(composites_source: pd.DataFrame, config: QuantConfig) -> pd.Dat
     pre = composites_source[composites_source[config.columns.phase] == config.pre_label].copy()
     for dim, items in config.survey_dimensions.items():
         existing = [item for item in items if item in pre.columns]
-        scored = pre[existing].replace(config.likert_mapping).apply(pd.to_numeric, errors="coerce")
+        scored = pre[existing].apply(_map_configured_numeric, mapping=config.likert_mapping)
         for item in config.reverse_coded_items.get(dim, []):
             if item in scored.columns:
                 scored[item] = 6 - scored[item]
