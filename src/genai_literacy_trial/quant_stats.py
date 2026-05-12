@@ -37,10 +37,14 @@ def welch_anova(df: pd.DataFrame, group_col: str, value_col: str) -> dict[str, f
     groups = [g for g in groups if len(g)]
     if len(groups) < 2:
         return {"statistic": math.nan, "p_value": math.nan}
+    ns = np.array([len(g) for g in groups], dtype=float)
+    if np.any(ns < 2):
+        return {"statistic": math.nan, "p_value": math.nan}
     means = np.array([g.mean() for g in groups])
     variances = np.array([g.var(ddof=1) for g in groups])
-    ns = np.array([len(g) for g in groups], dtype=float)
-    if np.any(ns < 2) or np.any(variances == 0):
+    if np.all(variances == 0):
+        return {"statistic": math.nan, "p_value": math.nan}
+    if np.any(variances == 0):
         res = stats.f_oneway(*groups)
         return {"statistic": float(res.statistic), "p_value": float(res.pvalue)}
     weights = ns / variances
@@ -67,7 +71,10 @@ def permutation_anova(df: pd.DataFrame, group_col: str, value_col: str, seed: in
     frame = df[[group_col, value_col]].dropna()
     if frame[group_col].nunique() < 2:
         return {"statistic": math.nan, "p_value": math.nan}
-    observed = stats.f_oneway(*[g[value_col].to_numpy() for _, g in frame.groupby(group_col)]).statistic
+    groups = [g[value_col].to_numpy() for _, g in frame.groupby(group_col)]
+    if any(len(group) < 2 for group in groups) or all(np.var(group, ddof=0) == 0 for group in groups):
+        return {"statistic": math.nan, "p_value": math.nan}
+    observed = stats.f_oneway(*groups).statistic
     rng = np.random.default_rng(seed)
     values = frame[value_col].to_numpy()
     labels = frame[group_col].to_numpy()

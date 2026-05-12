@@ -10,6 +10,8 @@ from genai_literacy_trial.quant_stats import (
     mean_ci_bootstrap,
     pearson_with_fisher_ci,
     small_sample_sensitivity,
+    permutation_anova,
+    welch_anova,
 )
 
 
@@ -39,3 +41,75 @@ def test_correlation_fdr_reliability_and_sensitivity_outputs() -> None:
     assert sensitivity["detectable_d_a_vs_b_80_power"] > 1
     assert sensitivity["detectable_r_n45_80_power"] > 0.3
 
+
+def test_welch_anova_returns_nan_for_small_groups() -> None:
+    frame = pd.DataFrame(
+        {
+            "group": ["A", "B", "B", "C", "C"],
+            "value": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+
+    result = welch_anova(frame, "group", "value")
+
+    assert pd.isna(result["statistic"])
+    assert pd.isna(result["p_value"])
+
+
+def test_welch_anova_returns_nan_for_all_constant_groups() -> None:
+    frame = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B", "C", "C"],
+            "value": [1.0, 1.0, 2.0, 2.0, 3.0, 3.0],
+        }
+    )
+
+    result = welch_anova(frame, "group", "value")
+
+    assert pd.isna(result["statistic"])
+    assert pd.isna(result["p_value"])
+
+
+def test_permutation_anova_returns_nan_for_small_groups() -> None:
+    frame = pd.DataFrame(
+        {
+            "group": ["A", "B", "B", "C", "C"],
+            "value": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+
+    result = permutation_anova(frame, "group", "value")
+
+    assert pd.isna(result["statistic"])
+    assert pd.isna(result["p_value"])
+
+
+def test_permutation_anova_returns_nan_for_all_constant_groups() -> None:
+    frame = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B", "C", "C"],
+            "value": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        }
+    )
+
+    result = permutation_anova(frame, "group", "value")
+
+    assert pd.isna(result["statistic"])
+    assert pd.isna(result["p_value"])
+
+
+def test_welch_and_permutation_anova_normal_case_stability() -> None:
+    frame = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B", "B", "C", "C", "C"],
+            "value": [1.0, 2.0, 3.0, 2.0, 3.0, 4.0, 3.0, 4.0, 5.0],
+        }
+    )
+
+    welch = welch_anova(frame, "group", "value")
+    permutation = permutation_anova(frame, "group", "value")
+
+    assert np.isclose(welch["statistic"], 18 / 7)
+    assert np.isclose(welch["p_value"], 0.191406, atol=0.000001)
+    assert permutation["statistic"] == 3.0
+    assert permutation["p_value"] == 0.1409295352323838
