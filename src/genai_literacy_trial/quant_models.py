@@ -10,6 +10,7 @@ import statsmodels.formula.api as smf
 
 from genai_literacy_trial.quant_stats import (
     benjamini_hochberg,
+    DEFAULT_SEED,
     group_summary_ci,
     hedges_g,
     kruskal_test,
@@ -160,7 +161,7 @@ def _contrast_rows(df: pd.DataFrame, value: str) -> list[dict[str, float | str]]
         observed = abs(float(a.mean() - b.mean()))
         combined = np.concatenate([a.to_numpy(), b.to_numpy()])
         labels = np.array([0] * len(a) + [1] * len(b))
-        rng = np.random.default_rng(int("2026" + "0615"))
+        rng = np.random.default_rng(DEFAULT_SEED)
         count = 0
         n_perm = 2000
         for _ in range(n_perm):
@@ -183,7 +184,7 @@ def _contrast_rows(df: pd.DataFrame, value: str) -> list[dict[str, float | str]]
     return rows
 
 
-def _mean_difference_ci(a: pd.Series, b: pd.Series, seed: int = int("2026" + "0615"), n_boot: int = 1000) -> dict[str, float]:
+def _mean_difference_ci(a: pd.Series, b: pd.Series, seed: int = DEFAULT_SEED, n_boot: int = 1000) -> dict[str, float]:
     x = pd.Series(a).dropna().astype(float).to_numpy()
     y = pd.Series(b).dropna().astype(float).to_numpy()
     if len(x) == 0 or len(y) == 0:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 import pandas as pd
+from pandas.testing import assert_frame_equal
 
 import genai_literacy_trial.quant_models as quant_models
 from genai_literacy_trial.quant_config import QuantConfig
@@ -260,6 +261,101 @@ def test_contrast_table_separates_mean_and_effect_size_cis() -> None:
 
     assert {"mean_difference_ci_low", "mean_difference_ci_high", "hedges_g_ci_low", "hedges_g_ci_high"} <= set(contrasts.columns)
     assert {"ci_low", "ci_high"}.isdisjoint(contrasts.columns)
+
+
+def test_participant_level_training_effect_columns_stable() -> None:
+    participant, _, _ = _prepared()
+
+    training = participant_level_training_effect(participant)
+
+    assert set(training) == {"summary", "tests", "contrasts"}
+    assert set(training["summary"].columns) == {
+        "metric",
+        "group",
+        "n",
+        "mean",
+        "sd",
+        "ci_low",
+        "ci_high",
+        "n_participants",
+    }
+    assert set(training["tests"].columns) == {"test", "statistic", "p_value"}
+    assert set(training["contrasts"].columns) == {
+        "contrast",
+        "mean_difference",
+        "mean_difference_ci_low",
+        "mean_difference_ci_high",
+        "hedges_g",
+        "hedges_g_ci_low",
+        "hedges_g_ci_high",
+        "p_value",
+        "n",
+    }
+
+
+def test_participant_level_training_effect_contrasts_are_deterministic_and_stable() -> None:
+    participant, _, _ = _prepared()
+
+    first = participant_level_training_effect(participant)["contrasts"].reset_index(drop=True)
+    second = participant_level_training_effect(participant)["contrasts"].reset_index(drop=True)
+
+    assert_frame_equal(first, second)
+
+
+def test_participant_level_training_effect_contrast_outputs_match_fixture() -> None:
+    participant, _, _ = _prepared()
+
+    contrasts = participant_level_training_effect(participant)["contrasts"]
+    expected = pd.DataFrame(
+        [
+            {
+                "contrast": "C vs A",
+                "mean_difference": 1.1666666666666665,
+                "mean_difference_ci_low": 1.1666666666666665,
+                "mean_difference_ci_high": 1.1666666666666665,
+                "hedges_g": float("nan"),
+                "hedges_g_ci_low": float("nan"),
+                "hedges_g_ci_high": float("nan"),
+                "p_value": 0.37181409295352325,
+                "n": 3,
+            },
+            {
+                "contrast": "C vs B",
+                "mean_difference": 1.1666666666666665,
+                "mean_difference_ci_low": 1.1666666666666665,
+                "mean_difference_ci_high": 1.1666666666666665,
+                "hedges_g": float("nan"),
+                "hedges_g_ci_low": float("nan"),
+                "hedges_g_ci_high": float("nan"),
+                "p_value": 0.37181409295352325,
+                "n": 3,
+            },
+            {
+                "contrast": "B vs A",
+                "mean_difference": 0.0,
+                "mean_difference_ci_low": 0.0,
+                "mean_difference_ci_high": 0.0,
+                "hedges_g": 0.0,
+                "hedges_g_ci_low": 0.0,
+                "hedges_g_ci_high": 0.0,
+                "p_value": 1.0,
+                "n": 4,
+            },
+            {
+                "contrast": "C vs pooled A+B",
+                "mean_difference": 1.1666666666666665,
+                "mean_difference_ci_low": 1.1666666666666665,
+                "mean_difference_ci_high": 1.1666666666666665,
+                "hedges_g": float("nan"),
+                "hedges_g_ci_low": float("nan"),
+                "hedges_g_ci_high": float("nan"),
+                "p_value": 0.22488755622188905,
+                "n": 5,
+            },
+        ]
+    )
+
+    assert_frame_equal(contrasts, expected, check_like=False, check_exact=False, rtol=1e-12, atol=1e-12)
 
 
 def test_calibration_keeps_raw_and_standardized_estimates_separate() -> None:
