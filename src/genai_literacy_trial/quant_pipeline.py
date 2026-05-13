@@ -56,6 +56,8 @@ REQUIRED_TABLES = [
     "table_prompt_sensitivity_all4_assignments",
 ]
 
+_GENERATED_PUBLIC_SUFFIXES = {".csv", ".png", ".pdf", ".md"}
+
 
 def _read_input(input_dir: Path, name: str) -> pd.DataFrame:
     csv = input_dir / f"{name}.csv"
@@ -69,6 +71,15 @@ def _read_input(input_dir: Path, name: str) -> pd.DataFrame:
     if alt.exists():
         return pd.read_csv(alt)
     raise FileNotFoundError(f"Missing {name}.csv or {name}.xlsx in {input_dir}")
+
+
+def _clean_public_output_dir(public_output_dir: Path) -> None:
+    """Delete previous generated-style public outputs before writing a fresh run."""
+    if not public_output_dir.exists():
+        return
+    for path in public_output_dir.iterdir():
+        if path.is_file() and path.suffix.lower() in _GENERATED_PUBLIC_SUFFIXES:
+            path.unlink()
 
 
 def _merge_pre_composites(participant: pd.DataFrame, composites: pd.DataFrame) -> pd.DataFrame:
@@ -172,6 +183,7 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
     }
 
     public_output_dir.mkdir(parents=True, exist_ok=True)
+    _clean_public_output_dir(public_output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     generated: list[str] = []
     for name in REQUIRED_TABLES:
