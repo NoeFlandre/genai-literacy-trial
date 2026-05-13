@@ -21,7 +21,7 @@ from genai_literacy_trial.quant_preprocess import (
     suppress_small_cells,
     validate_analysis_inventory,
 )
-from genai_literacy_trial.quant_schema import PARTICIPANT_KEY_COLUMN
+from genai_literacy_trial.quant_schema import NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN
 from tests.quant_fixtures import synthetic_quant_frames
 
 
@@ -36,7 +36,7 @@ def test_preprocess_builds_retained_participant_and_assignment_tables() -> None:
     assert summary["pre_responses"] == 6
     assert summary["post_responses"] == 5
     assert summary["retained_participants"] == 5
-    assert participant["participant_key"].is_unique
+    assert participant[PARTICIPANT_KEY_COLUMN].is_unique
     assert set(participant["group"]) == {"A", "B", "C"}
     assert len(participant) == 5
     assert "participant_id" not in participant.columns
@@ -57,7 +57,7 @@ def test_build_participant_table_allows_exact_duplicate_grade_rows() -> None:
     participant = build_participant_table(retained, grades, prompts, config)
 
     assert participant.shape[0] == 5
-    assert participant["participant_key"].is_unique
+    assert participant[PARTICIPANT_KEY_COLUMN].is_unique
 
 
 def test_build_participant_table_rejects_conflicting_duplicate_grade_rows() -> None:
@@ -80,7 +80,7 @@ def test_survey_composites_reverse_code_and_require_half_items() -> None:
     retained, _ = prepare_retained_survey(survey, config)
 
     composites = compute_survey_composites(retained, config)
-    pre = composites[(composites["phase"] == "pre") & (composites["participant_key"].notna())].iloc[0]
+    pre = composites[(composites["phase"] == NORMALIZED_PRE_LABEL) & (composites[PARTICIPANT_KEY_COLUMN].notna())].iloc[0]
 
     assert pre["perceived_usefulness"] >= 3
     assert math.isclose(pre["locus_of_control"], 4.0)
@@ -134,8 +134,8 @@ def test_prior_chatgpt_use_scores_agree_with_mapping_table_for_mapped_and_numeri
     map_lookup = dict(zip(mapping["prior_chatgpt_use"], mapping["mapped_score"], strict=True))
 
     merged = (
-        retained_survey.assign(participant_key=retained_survey["participant_id"].map(participant_key))
-        .merge(composites[["participant_key", "prior_chatgpt_use_score"]], on="participant_key", how="left")
+        retained_survey.assign(**{PARTICIPANT_KEY_COLUMN: retained_survey["participant_id"].map(participant_key)})
+        .merge(composites[[PARTICIPANT_KEY_COLUMN, "prior_chatgpt_use_score"]], on=PARTICIPANT_KEY_COLUMN, how="left")
         .merge(mapping, on="prior_chatgpt_use", how="left", suffixes=("", "_from_map"))
     )
 
@@ -164,7 +164,7 @@ def test_reliability_reverse_codes_items_before_alpha() -> None:
     retained = pd.DataFrame(
         {
             "participant_id": ["p1", "p2", "p3", "p4"],
-            "phase": ["pre", "pre", "pre", "pre"],
+            "phase": [NORMALIZED_PRE_LABEL] * 4,
             "control_1": ["1", "2", "3", "4"],
             "control_reverse": ["5", "4", "3", "2"],
         }
@@ -181,7 +181,7 @@ def test_reliability_accepts_text_and_numeric_like_lookups_consistently() -> Non
     text = pd.DataFrame(
         {
             "participant_id": ["p1", "p2", "p3", "p4"],
-            "phase": ["pre", "pre", "pre", "pre"],
+            "phase": [NORMALIZED_PRE_LABEL] * 4,
             "control_1": ["Strongly disagree", "Disagree", "Agree", "Strongly agree"],
             "control_reverse": ["Strongly agree", "Agree", "Disagree", "Strongly disagree"],
         }
@@ -189,7 +189,7 @@ def test_reliability_accepts_text_and_numeric_like_lookups_consistently() -> Non
     numeric = pd.DataFrame(
         {
             "participant_id": ["p1", "p2", "p3", "p4"],
-            "phase": ["pre", "pre", "pre", "pre"],
+            "phase": [NORMALIZED_PRE_LABEL] * 4,
             "control_1": ["1", "2", "4", "5"],
             "control_reverse": ["5", "4", "2", "1"],
         }

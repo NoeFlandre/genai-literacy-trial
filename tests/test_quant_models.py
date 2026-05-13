@@ -25,6 +25,7 @@ from genai_literacy_trial.quant_preprocess import (
     compute_survey_composites,
     prepare_retained_survey,
 )
+from genai_literacy_trial.quant_schema import NORMALIZED_POST_LABEL, NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN
 from tests.quant_fixtures import synthetic_quant_frames
 
 
@@ -34,8 +35,8 @@ def _prepared():
     retained, _ = prepare_retained_survey(survey, config)
     participant = build_participant_table(retained, grades, prompts, config)
     composites = compute_survey_composites(retained, config)
-    pre = composites[composites["phase"] == "pre"].drop(columns=["phase"])
-    participant = participant.merge(pre, on="participant_key", how="left")
+    pre = composites[composites["phase"] == NORMALIZED_PRE_LABEL].drop(columns=["phase"])
+    participant = participant.merge(pre, on=PARTICIPANT_KEY_COLUMN, how="left")
     assignment = build_assignment_prompt_table(prompts, participant, config)
     return participant, assignment, composites
 
@@ -390,8 +391,8 @@ def test_prepost_model_requires_group_and_labels_analysis_type() -> None:
 def test_prepost_phase_p_value_excludes_interaction_terms(monkeypatch) -> None:
     composites = pd.DataFrame(
         {
-            "participant_key": ["p1", "p1", "p2", "p2", "p3", "p3", "p4", "p4"],
-            "phase": ["pre", "post"] * 4,
+            PARTICIPANT_KEY_COLUMN: ["p1", "p1", "p2", "p2", "p3", "p3", "p4", "p4"],
+            "phase": [NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL] * 4,
             "group": ["A", "A", "A", "A", "B", "B", "B", "B"],
             "trust": [1.0, 2.0, 1.0, 2.0, 1.0, 4.0, 1.0, 4.0],
         }

@@ -4,13 +4,15 @@ from pathlib import Path
 
 import pandas as pd
 
+from genai_literacy_trial.quant_schema import NORMALIZED_POST_LABEL, NORMALIZED_PRE_LABEL
+
 
 def synthetic_quant_frames() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     ids = [f"p{i:02d}" for i in range(1, 7)]
     groups = ["A", "A", "B", "B", "C", "C"]
     survey_rows = []
     for pid, group in zip(ids, groups, strict=True):
-        phases = ["pre", "post"] if pid != "p06" else ["pre"]
+        phases = [NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL] if pid != "p06" else [NORMALIZED_PRE_LABEL]
         for phase in phases:
             survey_rows.append(
                 {
@@ -18,7 +20,7 @@ def synthetic_quant_frames() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
                     "phase": phase,
                     "group": group,
                     "prior_chatgpt_use": "low" if pid in {"p01", "p03", "p05"} else "high",
-                    "useful_1": "Agree" if phase == "pre" else "Strongly agree",
+                    "useful_1": "Agree" if phase == NORMALIZED_PRE_LABEL else "Strongly agree",
                     "useful_2": "Neutral" if pid == "p02" else "Agree",
                     "control_1": "Agree",
                     "control_reverse": "Disagree",
