@@ -9,6 +9,8 @@ import pytest
 from genai_literacy_trial.quant_config import QuantConfig
 from genai_literacy_trial.quant_pipeline import _reliability
 from genai_literacy_trial.quant_preprocess import (
+    EXPECTED_GROUP_COUNTS_KEY,
+    GROUP_COUNT_METRIC_PREFIX,
     build_assignment_prompt_table,
     build_participant_table,
     compute_survey_composites,
@@ -266,6 +268,11 @@ def test_inventory_validation_checks_expected_group_counts() -> None:
     )
 
     assert {"group_count_A", "group_count_B", "group_count_C"} <= set(inventory["metric"])
+
+
+def test_group_count_inventory_contract_names_are_centralized() -> None:
+    assert EXPECTED_GROUP_COUNTS_KEY == "group_counts"
+    assert GROUP_COUNT_METRIC_PREFIX == "group_count_"
 
 
 def test_prior_use_mapping_table_flags_unmapped_categories() -> None:

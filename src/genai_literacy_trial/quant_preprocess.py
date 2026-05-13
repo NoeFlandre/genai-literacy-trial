@@ -12,6 +12,8 @@ from genai_literacy_trial.quant_config import QuantConfig
 TRANSCRIPT_RE = re.compile(r"(^user\d+|^gpt\d+|/ user \d+|/ gpt\d+)", re.IGNORECASE)
 NORMALIZED_PRE_LABEL = "pre"
 NORMALIZED_POST_LABEL = "post"
+EXPECTED_GROUP_COUNTS_KEY = "group_counts"
+GROUP_COUNT_METRIC_PREFIX = "group_count_"
 
 
 def participant_key(value: object) -> str:
@@ -229,12 +231,12 @@ def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFr
         "missing_prompt_scores": int(assignment["prompt_score"].isna().sum()),
     }
     for group, count in participant["group"].value_counts().sort_index().items():
-        observed[f"group_count_{group}"] = int(count)
+        observed[f"{GROUP_COUNT_METRIC_PREFIX}{group}"] = int(count)
     rows = []
     for metric, value in observed.items():
         exp = None if not expected else expected.get(metric)
-        if exp is None and expected and metric.startswith("group_count_"):
-            exp = expected.get("group_counts", {}).get(metric.removeprefix("group_count_"))
+        if exp is None and expected and metric.startswith(GROUP_COUNT_METRIC_PREFIX):
+            exp = expected.get(EXPECTED_GROUP_COUNTS_KEY, {}).get(metric.removeprefix(GROUP_COUNT_METRIC_PREFIX))
         status = "pass" if exp is None or int(exp) == value else "fail"
         if status == "fail":
             raise ValueError(f"Inventory mismatch for {metric}: observed {value}, expected {exp}")
