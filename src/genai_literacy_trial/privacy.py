@@ -99,9 +99,22 @@ def _read_text_if_supported(path: Path) -> str:
         return ""
 
 
+def _normalise_local_pattern_text(value: str) -> str:
+    normalized = re.sub(r"[\\/_-]", " ", value)
+    return re.sub(r"\s+", " ", normalized).strip().lower()
+
+
 def scan_file(path: Path, *, root: Path, local_patterns: list[str]) -> list[PrivacyFinding]:
     relative = path.relative_to(root)
     findings: list[PrivacyFinding] = []
+
+    if local_patterns:
+        relative_path = _normalise_local_pattern_text(relative.as_posix())
+        for pattern in local_patterns:
+            if _normalise_local_pattern_text(pattern) in relative_path:
+                findings.append(PrivacyFinding(path=relative, rule="local_pattern", evidence=pattern[:80]))
+                break
+
     if path.suffix.lower() in DEFAULT_DENIED_SUFFIXES:
         findings.append(PrivacyFinding(path=relative, rule="denied_suffix", evidence=path.suffix.lower()))
         return findings

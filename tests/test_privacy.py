@@ -54,6 +54,22 @@ def test_scan_file_detects_email_ids_names_transcripts_and_denied_suffixes(tmp_p
     assert ".xlsx" in DEFAULT_DENIED_SUFFIXES
 
 
+def test_scan_file_detects_local_pattern_in_file_path(tmp_path: Path) -> None:
+    local_pattern = "Jane" + " " + "Student"
+    public_file = tmp_path / ("Jane" + "_" + "Student" + "_summary.csv")
+    public_file.write_text("aggregate students\nall cohorts retained\n", encoding="utf-8")
+
+    findings = scan_file(public_file, root=tmp_path, local_patterns=[local_pattern])
+
+    assert findings == [
+        PrivacyFinding(
+            path=Path("Jane_Student_summary.csv"),
+            rule="local_pattern",
+            evidence=local_pattern,
+        )
+    ]
+
+
 def test_load_local_patterns_reads_ignored_yaml_shape(tmp_path: Path) -> None:
     config = tmp_path / "privacy_patterns.local.yml"
     first_pattern = "Jane" + " " + "Student"
@@ -77,3 +93,26 @@ def test_scan_public_tree_returns_no_findings_for_safe_repo(tmp_path: Path) -> N
     (tmp_path / "paper_outputs" / "summary.csv").write_text("metric,value\\nretained_students,45\\n", encoding="utf-8")
 
     assert scan_public_tree(tmp_path) == []
+
+
+def test_scan_public_tree_detects_local_pattern_in_path_from_config(tmp_path: Path) -> None:
+    public_file = tmp_path / ("Jane" + "_" + "Student" + "_summary.csv")
+    public_file.write_text("final cohort totals\n", encoding="utf-8")
+
+    pattern_file = tmp_path / "privacy_patterns.local.yml"
+    local_pattern = "Jane" + " " + "Student"
+    pattern_file.write_text(
+        f"""
+patterns:
+  - {local_pattern}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert scan_public_tree(tmp_path, local_pattern_file=pattern_file) == [
+        PrivacyFinding(
+            path=Path("Jane_Student_summary.csv"),
+            rule="local_pattern",
+            evidence=local_pattern,
+        )
+    ]
