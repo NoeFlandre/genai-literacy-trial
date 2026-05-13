@@ -12,6 +12,7 @@ from genai_literacy_trial.quant_config import QuantConfig
 TRANSCRIPT_RE = re.compile(r"(^user\d+|^gpt\d+|/ user \d+|/ gpt\d+)", re.IGNORECASE)
 NORMALIZED_PRE_LABEL = "pre"
 NORMALIZED_POST_LABEL = "post"
+PARTICIPANT_KEY_COLUMN = "participant_key"
 EXPECTED_GROUP_COUNTS_KEY = "group_counts"
 GROUP_COUNT_METRIC_PREFIX = "group_count_"
 
@@ -23,11 +24,11 @@ def participant_key(value: object) -> str:
 def prepare_retained_survey(survey: pd.DataFrame, config: QuantConfig) -> tuple[pd.DataFrame, dict[str, int]]:
     c = config.columns
     df = survey.copy()
-    df["participant_key"] = df[c.id].map(participant_key)
-    pre_keys = set(df.loc[df[c.phase] == config.pre_label, "participant_key"])
-    post_keys = set(df.loc[df[c.phase] == config.post_label, "participant_key"])
+    df[PARTICIPANT_KEY_COLUMN] = df[c.id].map(participant_key)
+    pre_keys = set(df.loc[df[c.phase] == config.pre_label, PARTICIPANT_KEY_COLUMN])
+    post_keys = set(df.loc[df[c.phase] == config.post_label, PARTICIPANT_KEY_COLUMN])
     retained = pre_keys & post_keys
-    out = df[df["participant_key"].isin(retained)].copy()
+    out = df[df[PARTICIPANT_KEY_COLUMN].isin(retained)].copy()
     summary = {
         "pre_responses": int(len(pre_keys)),
         "post_responses": int(len(post_keys)),
@@ -81,19 +82,19 @@ def _validate_grade_key_consistency(grade_df: pd.DataFrame, participant_key_col:
 def build_participant_table(survey: pd.DataFrame, grades: pd.DataFrame, prompts: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
     c = config.columns
     grade_df = grades.copy()
-    grade_df["participant_key"] = grade_df[c.id].map(participant_key)
-    retained_keys = set(survey["participant_key"]) if "participant_key" in survey.columns else set(survey[c.id].map(participant_key))
-    grade_df = grade_df[grade_df["participant_key"].isin(retained_keys)].copy()
-    _validate_grade_key_consistency(grade_df, "participant_key", [c.group, c.midterm_grade, c.final_grade])
-    grade_df = grade_df.drop_duplicates("participant_key").copy()
-    required = ["participant_key", c.group, c.midterm_grade, c.final_grade]
+    grade_df[PARTICIPANT_KEY_COLUMN] = grade_df[c.id].map(participant_key)
+    retained_keys = set(survey[PARTICIPANT_KEY_COLUMN]) if PARTICIPANT_KEY_COLUMN in survey.columns else set(survey[c.id].map(participant_key))
+    grade_df = grade_df[grade_df[PARTICIPANT_KEY_COLUMN].isin(retained_keys)].copy()
+    _validate_grade_key_consistency(grade_df, PARTICIPANT_KEY_COLUMN, [c.group, c.midterm_grade, c.final_grade])
+    grade_df = grade_df.drop_duplicates(PARTICIPANT_KEY_COLUMN).copy()
+    required = [PARTICIPANT_KEY_COLUMN, c.group, c.midterm_grade, c.final_grade]
     optional = [c.prior_chatgpt_use, c.gender, c.major]
     prior = survey[survey[c.phase] == config.pre_label].copy()
-    prior["participant_key"] = prior[c.id].map(participant_key)
-    prior_cols = ["participant_key"] + [col for col in optional if col in prior.columns]
+    prior[PARTICIPANT_KEY_COLUMN] = prior[c.id].map(participant_key)
+    prior_cols = [PARTICIPANT_KEY_COLUMN] + [col for col in optional if col in prior.columns]
     participant = grade_df[required + [col for col in optional if col in grade_df.columns]].merge(
         prior[prior_cols],
-        on="participant_key",
+        on=PARTICIPANT_KEY_COLUMN,
         how="left",
         suffixes=("", "_survey"),
     )
@@ -119,13 +120,13 @@ def build_participant_table(survey: pd.DataFrame, grades: pd.DataFrame, prompts:
     participant["final_points"] = _map_grade(participant["final_grade"], config, "final_grade")
     prompt_mean = (
         prompts[[c.id, c.prompt_score]]
-        .assign(participant_key=lambda d: d[c.id].map(participant_key))
+        .assign(**{PARTICIPANT_KEY_COLUMN: lambda d: d[c.id].map(participant_key)})
         .dropna(subset=[c.prompt_score])
-        .groupby("participant_key", as_index=False)[c.prompt_score]
+        .groupby(PARTICIPANT_KEY_COLUMN, as_index=False)[c.prompt_score]
         .agg(mean_prompt_score="mean", scored_assignments="size")
     )
-    participant = participant.merge(prompt_mean, on="participant_key", how="left")
-    keep = [col for col in ["participant_key", "group", "prior_chatgpt_use", "gender", "major", "midterm_points", "final_points", "mean_prompt_score", "scored_assignments"] if col in participant.columns]
+    participant = participant.merge(prompt_mean, on=PARTICIPANT_KEY_COLUMN, how="left")
+    keep = [col for col in [PARTICIPANT_KEY_COLUMN, "group", "prior_chatgpt_use", "gender", "major", "midterm_points", "final_points", "mean_prompt_score", "scored_assignments"] if col in participant.columns]
     return participant[keep].copy()
 
 
@@ -133,14 +134,14 @@ def build_assignment_prompt_table(prompts: pd.DataFrame, grades_or_participants:
     c = config.columns
     transcript_cols = [col for col in prompts.columns if TRANSCRIPT_RE.search(str(col))]
     df = prompts.drop(columns=transcript_cols).copy()
-    df["participant_key"] = df[c.id].map(participant_key)
+    df[PARTICIPANT_KEY_COLUMN] = df[c.id].map(participant_key)
     df = df.rename(columns={c.assignment: "assignment", c.prompt_score: "prompt_score"})
     participants_source = grades_or_participants.copy()
     if "group" not in participants_source.columns and "group_x" in participants_source.columns:
         participants_source = participants_source.rename(columns={"group_x": "group"})
-    participants = participants_source[["participant_key", "group"]].drop_duplicates()
-    out = df[["participant_key", "assignment", "prompt_score"]].merge(participants, on="participant_key", how="inner")
-    return out[["participant_key", "group", "assignment", "prompt_score"]].copy()
+    participants = participants_source[[PARTICIPANT_KEY_COLUMN, "group"]].drop_duplicates()
+    out = df[[PARTICIPANT_KEY_COLUMN, "assignment", "prompt_score"]].merge(participants, on=PARTICIPANT_KEY_COLUMN, how="inner")
+    return out[[PARTICIPANT_KEY_COLUMN, "group", "assignment", "prompt_score"]].copy()
 
 
 def _likert(frame: pd.DataFrame, columns: list[str], config: QuantConfig) -> pd.DataFrame:
@@ -150,8 +151,8 @@ def _likert(frame: pd.DataFrame, columns: list[str], config: QuantConfig) -> pd.
 def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
     c = config.columns
     rows = retained_survey.copy()
-    rows["participant_key"] = rows[c.id].map(participant_key)
-    base_cols = ["participant_key", c.phase]
+    rows[PARTICIPANT_KEY_COLUMN] = rows[c.id].map(participant_key)
+    base_cols = [PARTICIPANT_KEY_COLUMN, c.phase]
     if c.group in rows.columns:
         base_cols.append(c.group)
     out = rows[base_cols].rename(columns={c.phase: "phase", c.group: "group"}).copy()
@@ -201,7 +202,7 @@ def prior_use_mapping_table(retained_survey: pd.DataFrame, config: QuantConfig, 
 
 def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFrame, retained_survey: pd.DataFrame, config: QuantConfig, expected: dict[str, Any] | None = None) -> pd.DataFrame:
     phase_table = retained_survey.pivot_table(
-        index="participant_key",
+        index=PARTICIPANT_KEY_COLUMN,
         columns=config.columns.phase,
         values=config.columns.id,
         aggfunc="size",
@@ -211,7 +212,7 @@ def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFr
         raise ValueError("retained survey participants must have exactly one pre and one post row")
     if not ((phase_table[config.pre_label] == 1) & (phase_table[config.post_label] == 1)).all():
         raise ValueError("retained survey participants must have exactly one pre and one post row")
-    if participant["participant_key"].duplicated().any():
+    if participant[PARTICIPANT_KEY_COLUMN].duplicated().any():
         raise ValueError("participant-level table contains duplicated participant_key")
     if not set(participant["group"].dropna()).issubset(set(config.groups)):
         raise ValueError("Invalid group labels outside configured groups")
