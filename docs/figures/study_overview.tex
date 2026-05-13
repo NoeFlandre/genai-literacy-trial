@@ -49,23 +49,21 @@
 \node[headerbox, below=0.55cm of title, xshift=+4.5cm] (secC) {Section C};
 
 \node[box=colA, below=0.25cm of secA, text width=2.4cm]
-  (trainA) {\textbf{No Training}\\ {\footnotesize n\,=\,15 students}};
+  (trainA) {\textbf{No Training}\\ {\footnotesize retained n\,=\,13}};
 \node[box=colB, below=0.25cm of secB, text width=2.4cm]
-  (trainB) {\textbf{Moderate}\\ {\footnotesize n\,=\,15 students}};
+  (trainB) {\textbf{Moderate}\\ {\footnotesize retained n\,=\,13}};
 \node[box=colC, below=0.25cm of secC, text width=2.4cm]
-  (trainC) {\textbf{Extended}\\ {\footnotesize n\,=\,15 students}};
+  (trainC) {\textbf{Extended}\\ {\footnotesize retained n\,=\,19}};
 
 %% ============================================================
 %% ROW 2 - Shared curriculum (spanning all three)
 %% ============================================================
 \node[draw=colHead!60, fill=colBox, rounded corners=5pt,
-      text width=13.8cm, minimum height=1.1cm, inner sep=5pt,
+      text width=13.8cm, minimum height=1.0cm, inner sep=5pt,
       below=0.6cm of trainB]
   (curriculum)
-  {\textbf{Same instructor Same lectures 4 Assignments} \quad
-   \textit{(each requires ChatGPT; logs submitted)}\
-   {\footnotesize A1: context \& step-by-step \quad A2: expectations \& multimodal \quad
-    A3: decomposition \& criteria \quad A4: roles \& prompt comparison}};
+  {\textbf{Same instructor, lectures, and four assignments}\\[-1pt]
+   {\footnotesize Each assignment required ChatGPT use and submitted logs; training intensity varied by section.}};
 
 %% ============================================================
 %% ROW 3 - Data collected
@@ -78,21 +76,20 @@
   (d3h) {Prompt Quality};
 
 \node[box=colHead, below=0.20cm of d1h, text width=3.4cm, minimum width=3.6cm]
-  (d1) {{\footnotesize 9 dimensions (UTAUT2):\\trust, usefulness, ease of use,\\locus of control, ...}};
+  (d1) {{\footnotesize 55 pre and 45 post responses\\9 dimensions\\pre/post composites}};
 \node[box=colHead, below=0.20cm of d2h, text width=3.4cm, minimum width=3.6cm]
-  (d2) {{\footnotesize Midterm \& Final grades\\{(same scale across sections)}}};
+  (d2) {{\footnotesize Midterm \& final grades\\45 retained participants}};
 \node[box=colHead, below=0.20cm of d3h, text width=3.4cm, minimum width=3.6cm]
-  (d3) {{\footnotesize Instructor-rated 1--5\\{(chat logs reviewed)}}};
+  (d3) {{\footnotesize Instructor-rated 1--5\\144 scored prompt observations}};
 
 %% ============================================================
 %% ROW 4 - Analysis
 %% ============================================================
 \node[draw=colHead!50, fill=colBg, rounded corners=5pt,
       text width=13.8cm, minimum height=0.85cm, inner sep=5pt,
-      below=0.6cm of d2]
+      below=0.8cm of d2]
   (analysis)
-  {\textbf{Analysis:}\quad One-way ANOVA (section differences) Pearson correlations ~
-   Thematic analysis of open-ended responses (grounded theory)};
+  {\textbf{Analysis:}\quad Participant-level contrasts and correlations; prompt trajectory model; adjusted HC3 models; FDR correction};
 
 %% ============================================================
 %% ROW 5 - Key findings (3 boxes)
@@ -108,14 +105,14 @@
   (f3h) {Key Finding 3};
 
 \node[box=colC, below=0.20cm of f1h, text width=3.8cm, minimum width=4.0cm]
-  (f1) {Extended training \textbf{significantly} improves prompt quality~~
-        {\footnotesize ($p=0.0017$; mean A\,2.91 to C\,3.57)}};
+  (f1) {Extended training showed higher prompt quality\\[-1pt]
+        {\footnotesize C vs pooled A+B:\\$\Delta=0.64$, $g=0.77$, $p=0.014$}};
 \node[box=colHead, below=0.20cm of f2h, text width=3.8cm, minimum width=4.0cm]
-  (f2) {Better prompts correlate with higher final grades~~
-        {\footnotesize ($r=0.45,\ p<0.001$)}};
+  (f2) {Better prompts correlated with higher final grades\\[-1pt]
+        {\footnotesize Pearson $r=0.451$\\95\% CI [0.181, 0.657], $n=45$}};
 \node[box=colA, below=0.20cm of f3h, text width=3.8cm, minimum width=4.0cm]
-  (f3) {Higher perceived control to lower prompt quality~~
-        {\footnotesize (locus of control: $r=-0.57$)}};
+  (f3) {Higher pre-test locus of control predicted lower prompt quality\\[-1pt]
+        {\footnotesize std. $\beta=-0.558$\\FDR $p=0.0015$}};
 
 %% ============================================================
 %% ARROWS - training to curriculum to data to analysis to findings
