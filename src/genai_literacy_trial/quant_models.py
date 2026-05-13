@@ -8,6 +8,7 @@ import pandas as pd
 from scipy import stats
 import statsmodels.formula.api as smf
 
+from genai_literacy_trial.quant_schema import NORMALIZED_POST_LABEL, NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN
 from genai_literacy_trial.quant_stats import (
     benjamini_hochberg,
     DEFAULT_SEED,
@@ -142,18 +143,18 @@ def fit_prompt_trajectory_model(assignment_df: pd.DataFrame) -> ModelSummary:
     frame["assignment"] = frame["assignment"].astype(int).astype(str)
     formula = "prompt_score ~ group * C(assignment)"
     try:
-        model = smf.mixedlm(formula, data=frame, groups=frame["participant_key"])
+        model = smf.mixedlm(formula, data=frame, groups=frame[PARTICIPANT_KEY_COLUMN])
         result = model.fit(reml=False, disp=False)
         if not bool(getattr(result, "converged", True)):
             raise ValueError("MixedLM did not converge")
         tidy = _tidy_result(result, "prompt_trajectory_mixedlm", len(frame))
         method = "mixedlm"
     except (ValueError, np.linalg.LinAlgError) as exc:
-        result = smf.ols(formula, data=frame).fit(cov_type="cluster", cov_kwds={"groups": frame["participant_key"]})
+        result = smf.ols(formula, data=frame).fit(cov_type="cluster", cov_kwds={"groups": frame[PARTICIPANT_KEY_COLUMN]})
         tidy = _tidy_result(result, "prompt_trajectory_clustered_ols", len(frame))
         tidy["warning"] = f"MixedLM failed; used clustered OLS fallback: {exc}"
         method = "clustered_ols_fallback"
-    return ModelSummary(formula=formula, n_observations=len(frame), n_participants=frame["participant_key"].nunique(), method=method, tidy=tidy)
+    return ModelSummary(formula=formula, n_observations=len(frame), n_participants=frame[PARTICIPANT_KEY_COLUMN].nunique(), method=method, tidy=tidy)
 
 
 def estimate_prompt_trajectory_means(assignment_df: pd.DataFrame, model_result: ModelSummary | None = None) -> pd.DataFrame:
@@ -350,32 +351,32 @@ def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
     dims = [
         c
         for c in composites.columns
-        if c not in {"participant_key", "phase", "group", "prior_chatgpt_use_score"} and not c.endswith("_items_present")
+        if c not in {PARTICIPANT_KEY_COLUMN, "phase", "group", "prior_chatgpt_use_score"} and not c.endswith("_items_present")
     ]
     rows = []
     for dim in dims:
-        long = composites[["participant_key", "phase", "group", dim]].dropna().copy()
+        long = composites[[PARTICIPANT_KEY_COLUMN, "phase", "group", dim]].dropna().copy()
         try:
-            result = smf.mixedlm(f"{dim} ~ phase * group", data=long, groups=long["participant_key"]).fit(reml=False, disp=False)
+            result = smf.mixedlm(f"{dim} ~ phase * group", data=long, groups=long[PARTICIPANT_KEY_COLUMN]).fit(reml=False, disp=False)
             if not bool(getattr(result, "converged", True)):
                 raise ValueError("MixedLM did not converge")
             tidy = _tidy_result(result, f"prepost_{dim}", int(result.nobs))
             is_interaction = tidy["term"].str.contains(":")
             phase_rows = tidy[tidy["term"].str.startswith("phase") & ~is_interaction]
             interaction_rows = tidy[is_interaction]
-            wide = composites.pivot_table(index="participant_key", columns="phase", values=dim, aggfunc="mean")
-            diff = wide["post"] - wide["pre"] if {"pre", "post"} <= set(wide.columns) else pd.Series(dtype=float)
+            wide = composites.pivot_table(index=PARTICIPANT_KEY_COLUMN, columns="phase", values=dim, aggfunc="mean")
+            diff = wide[NORMALIZED_POST_LABEL] - wide[NORMALIZED_PRE_LABEL] if {NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL} <= set(wide.columns) else pd.Series(dtype=float)
             stat = mean_ci_bootstrap(diff, n_boot=1000)
-            rows.append({"dimension": dim, "analysis_type": "mixed_model", "pre_mean": float(wide.get("pre", pd.Series(dtype=float)).mean()), "post_mean": float(wide.get("post", pd.Series(dtype=float)).mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(long["participant_key"].nunique()), "phase_p_value": float(phase_rows["p_value"].min()) if not phase_rows.empty else math.nan, "interaction_p_value": float(interaction_rows["p_value"].min()) if not interaction_rows.empty else math.nan})
+            rows.append({"dimension": dim, "analysis_type": "mixed_model", "pre_mean": float(wide.get(NORMALIZED_PRE_LABEL, pd.Series(dtype=float)).mean()), "post_mean": float(wide.get(NORMALIZED_POST_LABEL, pd.Series(dtype=float)).mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(long[PARTICIPANT_KEY_COLUMN].nunique()), "phase_p_value": float(phase_rows["p_value"].min()) if not phase_rows.empty else math.nan, "interaction_p_value": float(interaction_rows["p_value"].min()) if not interaction_rows.empty else math.nan})
         except (ValueError, np.linalg.LinAlgError):
-            wide = composites.pivot_table(index="participant_key", columns="phase", values=dim, aggfunc="mean")
-            if not {"pre", "post"} <= set(wide.columns):
+            wide = composites.pivot_table(index=PARTICIPANT_KEY_COLUMN, columns="phase", values=dim, aggfunc="mean")
+            if not {NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL} <= set(wide.columns):
                 continue
-            diff = wide["post"] - wide["pre"]
+            diff = wide[NORMALIZED_POST_LABEL] - wide[NORMALIZED_PRE_LABEL]
             stat = mean_ci_bootstrap(diff, n_boot=1000)
             paired = diff.dropna()
-            p_value = float(stats.ttest_rel(wide.loc[paired.index, "post"], wide.loc[paired.index, "pre"], nan_policy="omit").pvalue) if len(paired) > 1 else float("nan")
-            rows.append({"dimension": dim, "analysis_type": "paired_descriptive_fallback", "pre_mean": float(wide["pre"].mean()), "post_mean": float(wide["post"].mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(paired.shape[0]), "phase_p_value": p_value, "interaction_p_value": float("nan")})
+            p_value = float(stats.ttest_rel(wide.loc[paired.index, NORMALIZED_POST_LABEL], wide.loc[paired.index, NORMALIZED_PRE_LABEL], nan_policy="omit").pvalue) if len(paired) > 1 else float("nan")
+            rows.append({"dimension": dim, "analysis_type": "paired_descriptive_fallback", "pre_mean": float(wide[NORMALIZED_PRE_LABEL].mean()), "post_mean": float(wide[NORMALIZED_POST_LABEL].mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(paired.shape[0]), "phase_p_value": p_value, "interaction_p_value": float("nan")})
     out = pd.DataFrame(rows)
     if not out.empty:
         out["fdr_p_value"] = benjamini_hochberg(out["phase_p_value"])

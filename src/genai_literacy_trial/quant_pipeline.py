@@ -26,13 +26,13 @@ from genai_literacy_trial.quant_preprocess import (
     build_participant_table,
     compute_survey_composites,
     map_configured_numeric,
-    NORMALIZED_PRE_LABEL,
     prior_use_mapping_table,
     prepare_retained_survey,
     suppress_small_cells,
     validate_analysis_inventory,
 )
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME, write_quantitative_report
+from genai_literacy_trial.quant_schema import NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN
 from genai_literacy_trial.quant_stats import cronbach_alpha, group_summary_ci, small_sample_sensitivity
 
 
@@ -101,8 +101,8 @@ def _clean_public_output_dir(public_output_dir: Path) -> None:
 def _merge_pre_composites(participant: pd.DataFrame, composites: pd.DataFrame) -> pd.DataFrame:
     pre = composites[composites["phase"] == NORMALIZED_PRE_LABEL].drop(columns=["phase"], errors="ignore")
     pre = pre.drop(columns=["group"], errors="ignore")
-    pre = pre.drop_duplicates("participant_key")
-    return participant.merge(pre, on="participant_key", how="left")
+    pre = pre.drop_duplicates(PARTICIPANT_KEY_COLUMN)
+    return participant.merge(pre, on=PARTICIPANT_KEY_COLUMN, how="left")
 
 
 def _baseline(participant: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:

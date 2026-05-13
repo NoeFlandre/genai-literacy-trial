@@ -19,6 +19,7 @@ from genai_literacy_trial.quant_pipeline import (
 from genai_literacy_trial.quant_figures import FIGURE_FORMATS
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME
 from genai_literacy_trial.quant_preprocess import compute_survey_composites, participant_key
+from genai_literacy_trial.quant_schema import PARTICIPANT_KEY_COLUMN
 
 
 def test_merge_pre_composites_uses_normalized_pre_phase_from_composites() -> None:
@@ -38,7 +39,7 @@ def test_merge_pre_composites_uses_normalized_pre_phase_from_composites() -> Non
             "control_1": [2.0, 5.0],
         }
     )
-    participant = pd.DataFrame({"participant_key": [participant_key("p1")], "group": ["A"]})
+    participant = pd.DataFrame({PARTICIPANT_KEY_COLUMN: [participant_key("p1")], "group": ["A"]})
     composites = compute_survey_composites(retained, config)
 
     merged = _merge_pre_composites(participant, composites)

@@ -11,7 +11,6 @@ from genai_literacy_trial.quant_pipeline import _reliability
 from genai_literacy_trial.quant_preprocess import (
     EXPECTED_GROUP_COUNTS_KEY,
     GROUP_COUNT_METRIC_PREFIX,
-    PARTICIPANT_KEY_COLUMN,
     build_assignment_prompt_table,
     build_participant_table,
     compute_survey_composites,
@@ -22,6 +21,7 @@ from genai_literacy_trial.quant_preprocess import (
     suppress_small_cells,
     validate_analysis_inventory,
 )
+from genai_literacy_trial.quant_schema import PARTICIPANT_KEY_COLUMN
 from tests.quant_fixtures import synthetic_quant_frames
 
 

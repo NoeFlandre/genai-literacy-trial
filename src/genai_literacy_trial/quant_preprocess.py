@@ -8,11 +8,9 @@ from typing import Any, Mapping
 import pandas as pd
 
 from genai_literacy_trial.quant_config import QuantConfig
+from genai_literacy_trial.quant_schema import NORMALIZED_POST_LABEL, NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN
 
 TRANSCRIPT_RE = re.compile(r"(^user\d+|^gpt\d+|/ user \d+|/ gpt\d+)", re.IGNORECASE)
-NORMALIZED_PRE_LABEL = "pre"
-NORMALIZED_POST_LABEL = "post"
-PARTICIPANT_KEY_COLUMN = "participant_key"
 EXPECTED_GROUP_COUNTS_KEY = "group_counts"
 GROUP_COUNT_METRIC_PREFIX = "group_count_"
 
