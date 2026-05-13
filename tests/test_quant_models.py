@@ -8,6 +8,7 @@ from pandas.testing import assert_frame_equal
 import genai_literacy_trial.quant_models as quant_models
 from genai_literacy_trial.quant_config import QuantConfig
 from genai_literacy_trial.quant_models import (
+    CALIBRATION_DIMENSIONS,
     calibration_models,
     complete_case_diagnostics,
     fit_prompt_trajectory_model,
@@ -37,6 +38,16 @@ def _prepared():
     participant = participant.merge(pre, on="participant_key", how="left")
     assignment = build_assignment_prompt_table(prompts, participant, config)
     return participant, assignment, composites
+
+
+def test_calibration_dimensions_are_shared_across_model_outputs() -> None:
+    participant, _, _ = _prepared()
+
+    calibration = calibration_models(participant)
+    diagnostics = complete_case_diagnostics(participant)
+
+    assert tuple(calibration["dimension"]) == CALIBRATION_DIMENSIONS
+    assert tuple(diagnostics.query("model.str.startswith('calibration_')")["model"].str.removeprefix("calibration_")) == CALIBRATION_DIMENSIONS
 
 
 def test_models_use_participant_n_and_assignment_categorical_formula() -> None:

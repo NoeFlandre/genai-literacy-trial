@@ -8,9 +8,20 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
+PROMPT_TRAJECTORY_FIGURE = "fig_prompt_quality_trajectory"
+LEARNING_OUTCOME_FIGURE = "fig_prompt_quality_learning_outcome"
+CALIBRATION_FOREST_FIGURE = "fig_calibration_forest"
+FIGURE_STEMS = (
+    PROMPT_TRAJECTORY_FIGURE,
+    LEARNING_OUTCOME_FIGURE,
+    CALIBRATION_FOREST_FIGURE,
+)
+FIGURE_FORMATS = ("pdf", "png")
+
+
 def _save(fig, output_dir: Path, stem: str) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    paths = [output_dir / f"{stem}.pdf", output_dir / f"{stem}.png"]
+    paths = [output_dir / f"{stem}.{suffix}" for suffix in FIGURE_FORMATS]
     for path in paths:
         fig.savefig(path, bbox_inches="tight", dpi=300, metadata={"Creator": "genai-literacy-trial"})
     plt.close(fig)
@@ -27,7 +38,7 @@ def plot_prompt_quality_trajectory(table: pd.DataFrame, output_dir: Path) -> lis
     ax.set_ylim(1, 5)
     ax.legend(title="Group", loc="upper center", bbox_to_anchor=(0.5, 1.28), ncol=3, frameon=False, handlelength=1.8, columnspacing=1.2)
     ax.grid(alpha=0.2)
-    return _save(fig, output_dir, "fig_prompt_quality_trajectory")
+    return _save(fig, output_dir, PROMPT_TRAJECTORY_FIGURE)
 
 
 def plot_learning_outcome(table: pd.DataFrame, output_dir: Path) -> list[Path]:
@@ -37,7 +48,7 @@ def plot_learning_outcome(table: pd.DataFrame, output_dir: Path) -> list[Path]:
     ax.set_xlabel("Mean prompt quality")
     ax.set_ylabel("Predicted final grade points")
     ax.grid(alpha=0.2)
-    return _save(fig, output_dir, "fig_prompt_quality_learning_outcome")
+    return _save(fig, output_dir, LEARNING_OUTCOME_FIGURE)
 
 
 def plot_calibration_forest(table: pd.DataFrame, output_dir: Path) -> list[Path]:
@@ -49,4 +60,4 @@ def plot_calibration_forest(table: pd.DataFrame, output_dir: Path) -> list[Path]
     ax.set_yticks(list(y), plot["dimension"])
     ax.set_xlabel("Standardized coefficient")
     ax.grid(axis="x", alpha=0.2)
-    return _save(fig, output_dir, "fig_calibration_forest")
+    return _save(fig, output_dir, CALIBRATION_FOREST_FIGURE)

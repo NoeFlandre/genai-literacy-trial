@@ -12,6 +12,7 @@ from genai_literacy_trial.quant_preprocess import (
     build_assignment_prompt_table,
     build_participant_table,
     compute_survey_composites,
+    map_configured_numeric,
     participant_key,
     prior_use_mapping_table,
     prepare_retained_survey,
@@ -143,6 +144,16 @@ def test_prior_chatgpt_use_scores_agree_with_mapping_table_for_mapped_and_numeri
     assert map_lookup["low"] == 1.0
     assert map_lookup["3"] == 3.0
     assert map_lookup["4.0"] == 4.0
+
+
+def test_public_numeric_mapping_helper_matches_composite_scoring() -> None:
+    config = QuantConfig.default()
+    values = pd.Series(["Strongly disagree", "Agree", "4", "not mapped"])
+
+    mapped = map_configured_numeric(values, config.likert_mapping)
+
+    expected = pd.Series([1.0, 4.0, 4.0, np.nan])
+    pd.testing.assert_series_equal(mapped, expected)
 
 
 def test_reliability_reverse_codes_items_before_alpha() -> None:

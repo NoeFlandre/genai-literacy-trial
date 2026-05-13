@@ -10,6 +10,8 @@ import pandas as pd
 from genai_literacy_trial.quant_config import QuantConfig
 
 TRANSCRIPT_RE = re.compile(r"(^user\d+|^gpt\d+|/ user \d+|/ gpt\d+)", re.IGNORECASE)
+NORMALIZED_PRE_LABEL = "pre"
+NORMALIZED_POST_LABEL = "post"
 
 
 def participant_key(value: object) -> str:
@@ -42,7 +44,7 @@ def _map_grade(series: pd.Series, config: QuantConfig, column: str) -> pd.Series
     return mapped
 
 
-def _map_configured_numeric(series: pd.Series, mapping: Mapping[str, float]) -> pd.Series:
+def map_configured_numeric(series: pd.Series, mapping: Mapping[str, float]) -> pd.Series:
     return pd.to_numeric(series.replace(mapping), errors="coerce")
 
 
@@ -140,7 +142,7 @@ def build_assignment_prompt_table(prompts: pd.DataFrame, grades_or_participants:
 
 
 def _likert(frame: pd.DataFrame, columns: list[str], config: QuantConfig) -> pd.DataFrame:
-    return frame[columns].apply(_map_configured_numeric, mapping=config.likert_mapping)
+    return frame[columns].apply(map_configured_numeric, mapping=config.likert_mapping)
 
 
 def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
@@ -151,7 +153,7 @@ def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig
     if c.group in rows.columns:
         base_cols.append(c.group)
     out = rows[base_cols].rename(columns={c.phase: "phase", c.group: "group"}).copy()
-    out["phase"] = out["phase"].replace({config.pre_label: "pre", config.post_label: "post"})
+    out["phase"] = out["phase"].replace({config.pre_label: NORMALIZED_PRE_LABEL, config.post_label: NORMALIZED_POST_LABEL})
     for dimension, items in config.survey_dimensions.items():
         existing = [item for item in items if item in rows.columns]
         if not existing:
@@ -168,7 +170,7 @@ def compute_survey_composites(retained_survey: pd.DataFrame, config: QuantConfig
         out[f"{dimension}_items_present"] = present
     prior = c.prior_chatgpt_use
     if prior in rows.columns:
-        out["prior_chatgpt_use_score"] = _map_configured_numeric(rows[prior], config.likert_mapping)
+        out["prior_chatgpt_use_score"] = map_configured_numeric(rows[prior], config.likert_mapping)
     return out
 
 

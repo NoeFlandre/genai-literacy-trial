@@ -5,6 +5,10 @@ from pathlib import Path
 import pandas as pd
 
 from genai_literacy_trial.quant_figures import (
+    CALIBRATION_FOREST_FIGURE,
+    FIGURE_STEMS,
+    LEARNING_OUTCOME_FIGURE,
+    PROMPT_TRAJECTORY_FIGURE,
     plot_calibration_forest,
     plot_learning_outcome,
     plot_prompt_quality_trajectory,
@@ -28,3 +32,7 @@ def test_quant_figures_write_pdf_and_png_without_raw_ids(tmp_path: Path) -> None
         assert path.exists()
         assert path.stat().st_size > 0
         assert "p01" not in path.name
+
+
+def test_figure_stems_use_named_public_output_constants() -> None:
+    assert FIGURE_STEMS == (PROMPT_TRAJECTORY_FIGURE, LEARNING_OUTCOME_FIGURE, CALIBRATION_FOREST_FIGURE)

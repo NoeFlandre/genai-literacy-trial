@@ -4,6 +4,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+LOCAL_PATTERN_FILENAME = "privacy_patterns.local.yml"
+RULE_LOCAL_PATTERN = "local_pattern"
+RULE_DENIED_SUFFIX = "denied_suffix"
+
 DEFAULT_DENIED_SUFFIXES = {
     ".docx",
     ".htm",
@@ -48,6 +52,13 @@ COURSE_EXPORT_RE = re.compile(
     r"\b(?:" + "CSE" + r"\s*374|" + "CSE" + r"374|section\s+[ABC]|Group\s+[ABC]\s+Roster)\b",
     re.IGNORECASE,
 )
+PRIVACY_TEXT_RULES = (
+    ("email", EMAIL_RE),
+    ("academic_domain", ACADEMIC_DOMAIN_RE),
+    ("banner_or_student_id", BANNER_RE),
+    ("raw_transcript_column", TRANSCRIPT_RE),
+    ("course_export_identifier", COURSE_EXPORT_RE),
+)
 
 
 @dataclass(frozen=True)
@@ -65,7 +76,7 @@ def iter_public_files(root: Path) -> list[Path]:
         relative_parts = path.relative_to(root).parts
         if any(part in SKIPPED_DIRS for part in relative_parts):
             continue
-        if path.name == "privacy_patterns.local.yml":
+        if path.name == LOCAL_PATTERN_FILENAME:
             continue
         files.append(path)
     return files
@@ -112,25 +123,18 @@ def scan_file(path: Path, *, root: Path, local_patterns: list[str]) -> list[Priv
         relative_path = _normalise_local_pattern_text(relative.as_posix())
         for pattern in local_patterns:
             if _normalise_local_pattern_text(pattern) in relative_path:
-                findings.append(PrivacyFinding(path=relative, rule="local_pattern", evidence=pattern[:80]))
+                findings.append(PrivacyFinding(path=relative, rule=RULE_LOCAL_PATTERN, evidence=pattern[:80]))
                 break
 
     if path.suffix.lower() in DEFAULT_DENIED_SUFFIXES:
-        findings.append(PrivacyFinding(path=relative, rule="denied_suffix", evidence=path.suffix.lower()))
+        findings.append(PrivacyFinding(path=relative, rule=RULE_DENIED_SUFFIX, evidence=path.suffix.lower()))
         return findings
 
     text = _read_text_if_supported(path)
     if not text:
         return findings
 
-    checks = [
-        ("email", EMAIL_RE),
-        ("academic_domain", ACADEMIC_DOMAIN_RE),
-        ("banner_or_student_id", BANNER_RE),
-        ("raw_transcript_column", TRANSCRIPT_RE),
-        ("course_export_identifier", COURSE_EXPORT_RE),
-    ]
-    for rule, regex in checks:
+    for rule, regex in PRIVACY_TEXT_RULES:
         match = regex.search(text)
         if match:
             findings.append(PrivacyFinding(path=relative, rule=rule, evidence=match.group(0)[:80]))
@@ -138,13 +142,13 @@ def scan_file(path: Path, *, root: Path, local_patterns: list[str]) -> list[Priv
     lower_text = text.lower()
     for pattern in local_patterns:
         if pattern.lower() in lower_text:
-            findings.append(PrivacyFinding(path=relative, rule="local_pattern", evidence=pattern[:80]))
+            findings.append(PrivacyFinding(path=relative, rule=RULE_LOCAL_PATTERN, evidence=pattern[:80]))
             break
     return findings
 
 
 def scan_public_tree(root: Path, *, local_pattern_file: Path | None = None) -> list[PrivacyFinding]:
-    pattern_file = local_pattern_file or root / "privacy_patterns.local.yml"
+    pattern_file = local_pattern_file or root / LOCAL_PATTERN_FILENAME
     local_patterns = load_local_patterns(pattern_file)
     findings: list[PrivacyFinding] = []
     for path in iter_public_files(root):

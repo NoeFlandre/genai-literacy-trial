@@ -5,7 +5,17 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from genai_literacy_trial.cli import app
+from genai_literacy_trial.quant_figures import FIGURE_FORMATS, FIGURE_STEMS
+from genai_literacy_trial.quant_pipeline import REQUIRED_TABLES, TABLE_OUTPUT_FORMAT
+from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME
 from tests.quant_fixtures import write_synthetic_quant_input
+
+
+REQUIRED_ANALYZE_QUANT_OUTPUTS = [
+    QUANTITATIVE_REPORT_FILENAME,
+    *(f"{name}.{TABLE_OUTPUT_FORMAT}" for name in REQUIRED_TABLES),
+    *(f"{stem}.{suffix}" for stem in FIGURE_STEMS for suffix in FIGURE_FORMATS),
+]
 
 
 def test_analyze_quant_cli_generates_tables_figures_and_report(tmp_path: Path) -> None:
@@ -32,25 +42,7 @@ def test_analyze_quant_cli_generates_tables_figures_and_report(tmp_path: Path) -
     )
 
     assert result.exit_code == 0, result.output
-    required = [
-        "quantitative_report.md",
-        "table_data_verification.csv",
-        "table_complete_case_diagnostics.csv",
-        "table_learning_outcome_models.csv",
-        "table_participant_training_tests.csv",
-        "table_perceived_usefulness_models.csv",
-        "table_prior_use_mapping.csv",
-        "table_scored_assignment_distribution_by_group.csv",
-        "table_prompt_sensitivity_min3_assignments.csv",
-        "table_prompt_sensitivity_all4_assignments.csv",
-        "fig_prompt_quality_trajectory.pdf",
-        "fig_prompt_quality_trajectory.png",
-        "fig_prompt_quality_learning_outcome.pdf",
-        "fig_prompt_quality_learning_outcome.png",
-        "fig_calibration_forest.pdf",
-        "fig_calibration_forest.png",
-    ]
-    for name in required:
+    for name in REQUIRED_ANALYZE_QUANT_OUTPUTS:
         assert (public_dir / name).exists(), name
     assert "Privacy audit passed" in result.output
 
@@ -95,27 +87,9 @@ def test_analyze_quant_cli_cleans_stale_public_outputs(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    required = [
-        "quantitative_report.md",
-        "table_data_verification.csv",
-        "table_complete_case_diagnostics.csv",
-        "table_learning_outcome_models.csv",
-        "table_participant_training_tests.csv",
-        "table_perceived_usefulness_models.csv",
-        "table_prior_use_mapping.csv",
-        "table_scored_assignment_distribution_by_group.csv",
-        "table_prompt_sensitivity_min3_assignments.csv",
-        "table_prompt_sensitivity_all4_assignments.csv",
-        "fig_prompt_quality_trajectory.pdf",
-        "fig_prompt_quality_trajectory.png",
-        "fig_prompt_quality_learning_outcome.pdf",
-        "fig_prompt_quality_learning_outcome.png",
-        "fig_calibration_forest.pdf",
-        "fig_calibration_forest.png",
-    ]
     for stale in stale_artifacts:
         assert not stale.exists(), stale.name
-    for name in required:
+    for name in REQUIRED_ANALYZE_QUANT_OUTPUTS:
         assert (public_dir / name).exists(), name
     assert nested_stale.exists()
     assert preserved.exists()

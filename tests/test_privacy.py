@@ -4,12 +4,35 @@ from pathlib import Path
 
 from genai_literacy_trial.privacy import (
     DEFAULT_DENIED_SUFFIXES,
+    LOCAL_PATTERN_FILENAME,
+    PRIVACY_TEXT_RULES,
+    RULE_DENIED_SUFFIX,
+    RULE_LOCAL_PATTERN,
     PrivacyFinding,
     iter_public_files,
     load_local_patterns,
     scan_file,
     scan_public_tree,
 )
+
+
+def test_privacy_text_rules_are_centralized_in_scan_order() -> None:
+    assert [rule for rule, _ in PRIVACY_TEXT_RULES] == [
+        "email",
+        "academic_domain",
+        "banner_or_student_id",
+        "raw_transcript_column",
+        "course_export_identifier",
+    ]
+
+
+def test_local_pattern_filename_is_centralized() -> None:
+    assert LOCAL_PATTERN_FILENAME == "privacy_patterns.local.yml"
+
+
+def test_non_regex_privacy_rule_names_are_centralized() -> None:
+    assert RULE_LOCAL_PATTERN == "local_pattern"
+    assert RULE_DENIED_SUFFIX == "denied_suffix"
 
 
 def test_iter_public_files_skips_archive_and_git(tmp_path: Path) -> None:

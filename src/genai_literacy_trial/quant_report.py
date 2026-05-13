@@ -22,6 +22,18 @@ REQUIRED_SECTIONS = [
     "Privacy Verification",
 ]
 
+QUANTITATIVE_REPORT_FILENAME = "quantitative_report.md"
+
+REPORT_SECTION_TABLES = {
+    "Missingness": "table_missingness_prompt_by_group_assignment",
+    "Baseline Balance": "table_baseline_balance",
+    "Primary Analysis: Prompt Quality Over Assignments": "table_prompt_trajectory_model",
+    "Participant-Level Robustness": "table_participant_training_contrasts",
+    "Calibration: Beliefs vs Actual Prompt Skill": "table_calibration_models",
+    "Secondary Pre/Post Survey Change": "table_prepost_survey_change",
+    "Small-Sample Sensitivity": "table_small_sample_sensitivity",
+}
+
 
 def _md_table(df: pd.DataFrame) -> str:
     if df.empty:
@@ -106,6 +118,7 @@ def _manuscript_paragraphs(tables: dict[str, pd.DataFrame]) -> list[str]:
 
 def write_quantitative_report(tables: dict[str, pd.DataFrame], output_dir: Path, generated_files: list[str]) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
+    generated_file_list = list(dict.fromkeys([*generated_files, QUANTITATIVE_REPORT_FILENAME]))
     verification = tables.get("table_data_verification", pd.DataFrame())
     corr = tables.get("table_prompt_grade_correlations", pd.DataFrame())
     lines = ["# Quantitative Report", ""]
@@ -120,15 +133,6 @@ def write_quantitative_report(tables: dict[str, pd.DataFrame], output_dir: Path,
     ]
     lines += ["## Data Verification", "", _md_table(verification), ""]
     lines += ["## Unit-of-Analysis Audit", "", "participant-level analyses use one row per participant; old n=90 prompt-grade p-values are not used.", ""]
-    section_tables = {
-        "Missingness": "table_missingness_prompt_by_group_assignment",
-        "Baseline Balance": "table_baseline_balance",
-        "Primary Analysis: Prompt Quality Over Assignments": "table_prompt_trajectory_model",
-        "Participant-Level Robustness": "table_participant_training_contrasts",
-        "Calibration: Beliefs vs Actual Prompt Skill": "table_calibration_models",
-        "Secondary Pre/Post Survey Change": "table_prepost_survey_change",
-        "Small-Sample Sensitivity": "table_small_sample_sensitivity",
-    }
     for section in REQUIRED_SECTIONS[3:]:
         lines += [f"## {section}", ""]
         if section == "Learning Outcomes":
@@ -153,14 +157,14 @@ def write_quantitative_report(tables: dict[str, pd.DataFrame], output_dir: Path,
             calibration = tables.get("table_calibration_models", pd.DataFrame())
             lines += ["Survey reliability:", "", _md_table(reliability), "", _md_table(calibration), ""]
         elif section == "Files Generated":
-            lines += ["\n".join(f"- `{name}`" for name in generated_files), ""]
+            lines += ["\n".join(f"- `{name}`" for name in generated_file_list), ""]
         elif section == "Privacy Verification":
             lines += ["No raw identifiers, participant-level rows, raw survey responses, individual grades, or raw transcripts were written to public outputs.", ""]
         elif section == "Manuscript-Ready Quantitative Paragraphs":
             lines += _manuscript_paragraphs(tables) + [""]
         else:
-            table = tables.get(section_tables.get(section, ""), pd.DataFrame())
+            table = tables.get(REPORT_SECTION_TABLES.get(section, ""), pd.DataFrame())
             lines += [_md_table(table), ""]
-    path = output_dir / "quantitative_report.md"
+    path = output_dir / QUANTITATIVE_REPORT_FILENAME
     path.write_text("\n".join(lines), encoding="utf-8")
     return path

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import pandas as pd
 
 from genai_literacy_trial.privacy import scan_public_tree
 from genai_literacy_trial.quant_config import QuantConfig, load_expected_inventory, load_quant_config
-from genai_literacy_trial.quant_figures import plot_calibration_forest, plot_learning_outcome, plot_prompt_quality_trajectory
+from genai_literacy_trial.quant_figures import FIGURE_FORMATS, plot_calibration_forest, plot_learning_outcome, plot_prompt_quality_trajectory
 from genai_literacy_trial.quant_models import (
     calibration_models,
     complete_case_diagnostics,
@@ -24,16 +25,25 @@ from genai_literacy_trial.quant_preprocess import (
     build_assignment_prompt_table,
     build_participant_table,
     compute_survey_composites,
-    _map_configured_numeric,
+    map_configured_numeric,
+    NORMALIZED_PRE_LABEL,
     prior_use_mapping_table,
     prepare_retained_survey,
     suppress_small_cells,
     validate_analysis_inventory,
 )
-from genai_literacy_trial.quant_report import write_quantitative_report
+from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME, write_quantitative_report
 from genai_literacy_trial.quant_stats import cronbach_alpha, group_summary_ci, small_sample_sensitivity
 
 
+TABLE_OUTPUT_FORMAT = "csv"
+INPUT_DATASETS = ("survey", "grades", "prompts")
+INPUT_FILE_FORMATS = ("csv", "xlsx")
+INPUT_READERS: dict[str, Callable[[Path], pd.DataFrame]] = {
+    "csv": pd.read_csv,
+    "xlsx": pd.read_excel,
+}
+COMPATIBILITY_INPUT_PREFIX = "public_cli_input_"
 REQUIRED_TABLES = [
     "table_data_verification",
     "table_missingness_prompt_by_group_assignment",
@@ -56,21 +66,27 @@ REQUIRED_TABLES = [
     "table_prompt_sensitivity_all4_assignments",
 ]
 
-_GENERATED_PUBLIC_SUFFIXES = {".csv", ".png", ".pdf", ".md"}
+GENERATED_PUBLIC_SUFFIXES = {
+    f".{TABLE_OUTPUT_FORMAT}",
+    *(f".{suffix}" for suffix in FIGURE_FORMATS),
+    f".{QUANTITATIVE_REPORT_FILENAME.rsplit('.', maxsplit=1)[-1]}",
+}
+EMPTY_CALIBRATION_FOREST_ROW = {"dimension": "none", "std_beta": 0, "std_ci_low": 0, "std_ci_high": 0, "fdr_p_value": 1}
+EMPTY_CALIBRATION_FOREST_COLUMNS = tuple(EMPTY_CALIBRATION_FOREST_ROW)
 
 
 def _read_input(input_dir: Path, name: str) -> pd.DataFrame:
-    csv = input_dir / f"{name}.csv"
-    xlsx = input_dir / f"{name}.xlsx"
-    if csv.exists():
-        return pd.read_csv(csv)
-    if xlsx.exists():
-        return pd.read_excel(xlsx)
+    for suffix in INPUT_FILE_FORMATS:
+        path = input_dir / f"{name}.{suffix}"
+        reader = INPUT_READERS.get(suffix)
+        if reader is not None and path.exists():
+            return reader(path)
     # compatibility with clean_private_data CLI input names
-    alt = input_dir / f"public_cli_input_{name}.csv"
+    alt = input_dir / f"{COMPATIBILITY_INPUT_PREFIX}{name}.csv"
     if alt.exists():
         return pd.read_csv(alt)
-    raise FileNotFoundError(f"Missing {name}.csv or {name}.xlsx in {input_dir}")
+    expected = " or ".join(f"{name}.{suffix}" for suffix in INPUT_FILE_FORMATS)
+    raise FileNotFoundError(f"Missing {expected} in {input_dir}")
 
 
 def _clean_public_output_dir(public_output_dir: Path) -> None:
@@ -78,12 +94,12 @@ def _clean_public_output_dir(public_output_dir: Path) -> None:
     if not public_output_dir.exists():
         return
     for path in public_output_dir.iterdir():
-        if path.is_file() and path.suffix.lower() in _GENERATED_PUBLIC_SUFFIXES:
+        if path.is_file() and path.suffix.lower() in GENERATED_PUBLIC_SUFFIXES:
             path.unlink()
 
 
 def _merge_pre_composites(participant: pd.DataFrame, composites: pd.DataFrame) -> pd.DataFrame:
-    pre = composites[composites["phase"].isin(["pre", "Before"])].drop(columns=["phase"], errors="ignore")
+    pre = composites[composites["phase"] == NORMALIZED_PRE_LABEL].drop(columns=["phase"], errors="ignore")
     pre = pre.drop(columns=["group"], errors="ignore")
     pre = pre.drop_duplicates("participant_key")
     return participant.merge(pre, on="participant_key", how="left")
@@ -114,12 +130,18 @@ def _missingness(assignment: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _calibration_forest_source(calibration: pd.DataFrame) -> pd.DataFrame:
+    if not calibration.empty:
+        return calibration
+    return pd.DataFrame([EMPTY_CALIBRATION_FOREST_ROW], columns=EMPTY_CALIBRATION_FOREST_COLUMNS)
+
+
 def _reliability(composites_source: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
     rows = []
     pre = composites_source[composites_source[config.columns.phase] == config.pre_label].copy()
     for dim, items in config.survey_dimensions.items():
         existing = [item for item in items if item in pre.columns]
-        scored = pre[existing].apply(_map_configured_numeric, mapping=config.likert_mapping)
+        scored = pre[existing].apply(map_configured_numeric, mapping=config.likert_mapping)
         for item in config.reverse_coded_items.get(dim, []):
             if item in scored.columns:
                 scored[item] = 6 - scored[item]
@@ -131,9 +153,7 @@ def _reliability(composites_source: pd.DataFrame, config: QuantConfig) -> pd.Dat
 def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_path: Path | None, output_dir: Path, public_output_dir: Path) -> dict[str, Path]:
     config = load_quant_config(config_path)
     expected = load_expected_inventory(expected_inventory_path)
-    survey = _read_input(input_dir, "survey")
-    grades = _read_input(input_dir, "grades")
-    prompts = _read_input(input_dir, "prompts")
+    survey, grades, prompts = (_read_input(input_dir, name) for name in INPUT_DATASETS)
 
     retained, retention_summary = prepare_retained_survey(survey, config)
     participant = build_participant_table(retained, grades, prompts, config)
@@ -187,17 +207,16 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
     output_dir.mkdir(parents=True, exist_ok=True)
     generated: list[str] = []
     for name in REQUIRED_TABLES:
-        path = public_output_dir / f"{name}.csv"
+        path = public_output_dir / f"{name}.{TABLE_OUTPUT_FORMAT}"
         tables[name].to_csv(path, index=False)
         generated.append(path.name)
     for path in plot_prompt_quality_trajectory(trajectory_means, public_output_dir):
         generated.append(path.name)
     for path in plot_learning_outcome(model_based_learning_prediction_table(participant), public_output_dir):
         generated.append(path.name)
-    for path in plot_calibration_forest(calibration if not calibration.empty else pd.DataFrame({"dimension": ["none"], "std_beta": [0], "std_ci_low": [0], "std_ci_high": [0], "fdr_p_value": [1]}), public_output_dir):
+    for path in plot_calibration_forest(_calibration_forest_source(calibration), public_output_dir):
         generated.append(path.name)
-    report = write_quantitative_report(tables, public_output_dir, generated)
-    generated.append(report.name)
+    write_quantitative_report(tables, public_output_dir, generated)
     findings = scan_public_tree(public_output_dir)
     if findings:
         details = "; ".join(f"{f.path}:{f.rule}" for f in findings)

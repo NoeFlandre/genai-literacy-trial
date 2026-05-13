@@ -23,6 +23,19 @@ from genai_literacy_trial.quant_stats import (
 )
 
 
+CALIBRATION_DIMENSIONS = (
+    "trust",
+    "perceived_usefulness",
+    "perceived_ease_of_use",
+    "behavioral_intention",
+    "hedonic_motivation",
+    "locus_of_control",
+    "facilitating_conditions",
+    "social_influence",
+    "attitude",
+)
+
+
 @dataclass
 class ModelSummary:
     formula: str
@@ -261,10 +274,7 @@ def complete_case_diagnostics(participant_df: pd.DataFrame) -> pd.DataFrame:
         _model_diagnostics(frame, "perceived_usefulness_final_points", ["final_points", "midterm_points", "perceived_usefulness", "group", "prior_chatgpt_use_score"], "perceived_usefulness"),
         _model_diagnostics(frame.assign(grade_change=frame["final_points"] - frame["midterm_points"]), "perceived_usefulness_grade_change", ["grade_change", "perceived_usefulness", "group", "prior_chatgpt_use_score"], "perceived_usefulness"),
     ]
-    for dim in [
-        "trust", "perceived_usefulness", "perceived_ease_of_use", "behavioral_intention",
-        "hedonic_motivation", "locus_of_control", "facilitating_conditions", "social_influence", "attitude",
-    ]:
+    for dim in CALIBRATION_DIMENSIONS:
         if dim in frame.columns:
             rows.append(_model_diagnostics(frame, f"calibration_{dim}", ["mean_prompt_score", dim, "group", "prior_chatgpt_use_score"], dim))
     return pd.DataFrame(rows)
@@ -304,14 +314,10 @@ def perceived_usefulness_models(participant_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calibration_models(participant_df: pd.DataFrame) -> pd.DataFrame:
-    dimensions = [
-        "trust", "perceived_usefulness", "perceived_ease_of_use", "behavioral_intention",
-        "hedonic_motivation", "locus_of_control", "facilitating_conditions", "social_influence", "attitude",
-    ]
     rows = []
     frame = _canonical_group(participant_df)
     frame = _ensure_prior_use_score(frame)
-    for dim in dimensions:
+    for dim in CALIBRATION_DIMENSIONS:
         if dim not in frame.columns:
             continue
         work = _complete_cases(frame, ["mean_prompt_score", dim, "group", "prior_chatgpt_use_score"])

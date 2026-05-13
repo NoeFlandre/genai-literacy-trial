@@ -5,7 +5,7 @@ from pathlib import Path
 import tomllib
 from typing import Any
 
-from genai_literacy_trial.analysis import GRADE_POINTS, LIKERT_POINTS
+from genai_literacy_trial.scales import GRADE_POINTS, LIKERT_POINTS
 
 
 @dataclass(frozen=True)
@@ -57,20 +57,21 @@ class QuantConfig:
 def load_quant_config(path: Path | None) -> QuantConfig:
     if path is None:
         return QuantConfig.default()
+    default = QuantConfig.default()
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     columns = QuantColumns(**data.get("columns", {}))
     labels = data.get("labels", {})
     return QuantConfig(
         columns=columns,
-        pre_label=str(labels.get("pre", "pre")),
-        post_label=str(labels.get("post", "post")),
-        groups=tuple(str(x) for x in labels.get("groups", ["A", "B", "C"])),
-        assignments=tuple(int(x) for x in labels.get("assignments", [1, 2, 3, 4])),
-        min_public_cell_count=int(data.get("privacy", {}).get("min_public_cell_count", 5)),
-        survey_dimensions={str(k): list(v) for k, v in data.get("survey_dimensions", QuantConfig.default().survey_dimensions).items()},
-        reverse_coded_items={str(k): list(v) for k, v in data.get("reverse_coded_items", {}).items()},
-        likert_mapping={str(k): float(v) for k, v in data.get("likert_mapping", LIKERT_POINTS).items()},
-        grade_mapping={str(k): float(v) for k, v in data.get("grade_mapping", GRADE_POINTS).items()},
+        pre_label=str(labels.get("pre", default.pre_label)),
+        post_label=str(labels.get("post", default.post_label)),
+        groups=tuple(str(x) for x in labels.get("groups", default.groups)),
+        assignments=tuple(int(x) for x in labels.get("assignments", default.assignments)),
+        min_public_cell_count=int(data.get("privacy", {}).get("min_public_cell_count", default.min_public_cell_count)),
+        survey_dimensions={str(k): list(v) for k, v in data.get("survey_dimensions", default.survey_dimensions).items()},
+        reverse_coded_items={str(k): list(v) for k, v in data.get("reverse_coded_items", default.reverse_coded_items).items()},
+        likert_mapping={str(k): float(v) for k, v in data.get("likert_mapping", default.likert_mapping).items()},
+        grade_mapping={str(k): float(v) for k, v in data.get("grade_mapping", default.grade_mapping).items()},
     )
 
 
