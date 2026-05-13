@@ -42,6 +42,34 @@ def test_preprocess_builds_retained_participant_and_assignment_tables() -> None:
     assert assignment["prompt_score"].dropna().between(1, 5).all()
 
 
+def test_build_participant_table_allows_exact_duplicate_grade_rows() -> None:
+    survey, grades, prompts = synthetic_quant_frames()
+    config = QuantConfig.default()
+
+    duplicate = grades[grades["participant_id"] == "p02"].copy()
+    grades = pd.concat([grades, duplicate], ignore_index=True)
+
+    retained, _ = prepare_retained_survey(survey, config)
+    participant = build_participant_table(retained, grades, prompts, config)
+
+    assert participant.shape[0] == 5
+    assert participant["participant_key"].is_unique
+
+
+def test_build_participant_table_rejects_conflicting_duplicate_grade_rows() -> None:
+    survey, grades, prompts = synthetic_quant_frames()
+    config = QuantConfig.default()
+
+    duplicate = grades[grades["participant_id"] == "p02"].copy()
+    duplicate.loc[:, "group"] = "C"
+    grades = pd.concat([grades, duplicate], ignore_index=True)
+
+    retained, _ = prepare_retained_survey(survey, config)
+
+    with pytest.raises(ValueError, match="Conflicting grade rows"):
+        build_participant_table(retained, grades, prompts, config)
+
+
 def test_survey_composites_reverse_code_and_require_half_items() -> None:
     survey, _, _ = synthetic_quant_frames()
     config = QuantConfig.default()

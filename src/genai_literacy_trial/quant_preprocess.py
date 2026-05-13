@@ -55,12 +55,32 @@ def _map_configured_scalar(value: object, mapping: Mapping[str, float]) -> float
     return None if pd.isna(numeric) else float(numeric)
 
 
+def _validate_grade_key_consistency(grade_df: pd.DataFrame, participant_key_col: str, key_columns: list[str]) -> None:
+    conflicts = []
+    for key, part in grade_df.groupby(participant_key_col, dropna=False):
+        conflicting_fields = []
+        for column in key_columns:
+            values = [value for value in part[column].dropna().unique() if not pd.isna(value)]
+            if len(values) <= 1:
+                continue
+            label = column
+            vals = sorted(map(str, set(values)))
+            conflicting_fields.append(f"{label}: {vals}")
+        if conflicting_fields:
+            conflicts.append(f"{key} -> {', '.join(conflicting_fields)}")
+
+    if conflicts:
+        joined = "; ".join(conflicts)
+        raise ValueError(f"Conflicting grade rows for participant_key in: {joined}")
+
+
 def build_participant_table(survey: pd.DataFrame, grades: pd.DataFrame, prompts: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
     c = config.columns
     grade_df = grades.copy()
     grade_df["participant_key"] = grade_df[c.id].map(participant_key)
     retained_keys = set(survey["participant_key"]) if "participant_key" in survey.columns else set(survey[c.id].map(participant_key))
     grade_df = grade_df[grade_df["participant_key"].isin(retained_keys)].copy()
+    _validate_grade_key_consistency(grade_df, "participant_key", [c.group, c.midterm_grade, c.final_grade])
     grade_df = grade_df.drop_duplicates("participant_key").copy()
     required = ["participant_key", c.group, c.midterm_grade, c.final_grade]
     optional = [c.prior_chatgpt_use, c.gender, c.major]
