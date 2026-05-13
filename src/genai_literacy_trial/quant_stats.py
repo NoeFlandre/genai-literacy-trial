@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -122,13 +123,21 @@ def spearman_with_ci(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray, seed:
     frame = pd.DataFrame({"x": x, "y": y}).dropna()
     if len(frame) < 3:
         return {"correlation": math.nan, "p_value": math.nan, "ci_low": math.nan, "ci_high": math.nan, "n": len(frame)}
-    r, p = stats.spearmanr(frame["x"], frame["y"])
+    if np.nanvar(frame["x"], ddof=0) == 0 or np.nanvar(frame["y"], ddof=0) == 0:
+        return {"correlation": math.nan, "p_value": math.nan, "ci_low": math.nan, "ci_high": math.nan, "n": len(frame)}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=stats.ConstantInputWarning)
+        r, p = stats.spearmanr(frame["x"], frame["y"])
     rng = np.random.default_rng(seed)
     vals = []
     for _ in range(n_boot):
         sample = frame.iloc[rng.choice(len(frame), len(frame), True)]
-        vals.append(stats.spearmanr(sample["x"], sample["y"]).statistic)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=stats.ConstantInputWarning)
+            vals.append(stats.spearmanr(sample["x"], sample["y"]).statistic)
     vals = np.array([v for v in vals if np.isfinite(v)])
+    if len(vals) == 0:
+        return {"correlation": float(r), "p_value": float(p), "ci_low": math.nan, "ci_high": math.nan, "n": len(frame)}
     return {"correlation": float(r), "p_value": float(p), "ci_low": float(np.quantile(vals, 0.025)), "ci_high": float(np.quantile(vals, 0.975)), "n": len(frame)}
 
 
