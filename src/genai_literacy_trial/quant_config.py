@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
-from typing import Any
 
 from genai_literacy_trial.scales import GRADE_POINTS, LIKERT_POINTS
+
+ExpectedInventory = dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,7 @@ def load_quant_config(path: Path | None) -> QuantConfig:
     )
 
 
-def load_expected_inventory(path: Path | None) -> dict[str, Any]:
+def load_expected_inventory(path: Path | None) -> ExpectedInventory:
     if path is None or not path.exists():
         return {}
     return tomllib.loads(path.read_text(encoding="utf-8"))

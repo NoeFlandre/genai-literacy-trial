@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-from typing import Any, Mapping
+from typing import Mapping
 
 import pandas as pd
 
-from genai_literacy_trial.quant_config import QuantConfig
+from genai_literacy_trial.quant_config import ExpectedInventory, QuantConfig
 from genai_literacy_trial.quant_schema import NORMALIZED_POST_LABEL, NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN
 
 TRANSCRIPT_RE = re.compile(r"(^user\d+|^gpt\d+|/ user \d+|/ gpt\d+)", re.IGNORECASE)
@@ -198,7 +198,7 @@ def prior_use_mapping_table(retained_survey: pd.DataFrame, config: QuantConfig, 
     return pd.DataFrame(rows)
 
 
-def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFrame, retained_survey: pd.DataFrame, config: QuantConfig, expected: dict[str, Any] | None = None) -> pd.DataFrame:
+def validate_analysis_inventory(participant: pd.DataFrame, assignment: pd.DataFrame, retained_survey: pd.DataFrame, config: QuantConfig, expected: ExpectedInventory | None = None) -> pd.DataFrame:
     phase_table = retained_survey.pivot_table(
         index=PARTICIPANT_KEY_COLUMN,
         columns=config.columns.phase,
