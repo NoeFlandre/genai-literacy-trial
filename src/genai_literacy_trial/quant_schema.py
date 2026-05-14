@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
 import pandas as pd
 
@@ -33,4 +34,8 @@ REQUIRED_QUANT_TABLES = (
 )
 
 QuantTableMap = dict[str, pd.DataFrame]
-QuantPathMap = dict[str, Path]
+
+
+class QuantPathMap(TypedDict):
+    public_output_dir: Path
+    private_output_dir: Path

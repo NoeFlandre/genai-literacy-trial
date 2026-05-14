@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import get_type_hints
+
 from genai_literacy_trial.quant_schema import (
     NORMALIZED_POST_LABEL,
     NORMALIZED_PRE_LABEL,
@@ -62,3 +65,10 @@ def test_quant_path_map_type_alias_is_importable() -> None:
     paths: QuantPathMap = {}
 
     assert paths == {}
+
+
+def test_quant_path_map_declares_required_output_paths() -> None:
+    assert get_type_hints(QuantPathMap) == {
+        PUBLIC_OUTPUT_DIR_KEY: Path,
+        PRIVATE_OUTPUT_DIR_KEY: Path,
+    }
