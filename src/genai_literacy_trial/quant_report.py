@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from genai_literacy_trial.quant_schema import QuantTableMap
+
 
 REQUIRED_SECTIONS = [
     "Executive Summary",
@@ -67,7 +69,7 @@ def _fmt(value: object, digits: int = 3) -> str:
     return str(value)
 
 
-def _manuscript_paragraphs(tables: dict[str, pd.DataFrame]) -> list[str]:
+def _manuscript_paragraphs(tables: QuantTableMap) -> list[str]:
     verification = tables.get("table_data_verification", pd.DataFrame())
     contrasts = tables.get("table_participant_training_contrasts", pd.DataFrame())
     corr = tables.get("table_prompt_grade_correlations", pd.DataFrame())
@@ -116,7 +118,7 @@ def _manuscript_paragraphs(tables: dict[str, pd.DataFrame]) -> list[str]:
     return lines
 
 
-def write_quantitative_report(tables: dict[str, pd.DataFrame], output_dir: Path, generated_files: list[str]) -> Path:
+def write_quantitative_report(tables: QuantTableMap, output_dir: Path, generated_files: list[str]) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     generated_file_list = list(dict.fromkeys([*generated_files, QUANTITATIVE_REPORT_FILENAME]))
     verification = tables.get("table_data_verification", pd.DataFrame())
