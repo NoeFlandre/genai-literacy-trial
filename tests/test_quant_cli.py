@@ -6,14 +6,15 @@ from typer.testing import CliRunner
 
 from genai_literacy_trial.cli import app
 from genai_literacy_trial.quant_figures import FIGURE_FORMATS, FIGURE_STEMS
-from genai_literacy_trial.quant_pipeline import REQUIRED_TABLES, TABLE_OUTPUT_FORMAT
+from genai_literacy_trial.quant_pipeline import TABLE_OUTPUT_FORMAT
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME
+from genai_literacy_trial.quant_schema import REQUIRED_QUANT_TABLES
 from tests.quant_fixtures import write_synthetic_quant_input
 
 
 REQUIRED_ANALYZE_QUANT_OUTPUTS = [
     QUANTITATIVE_REPORT_FILENAME,
-    *(f"{name}.{TABLE_OUTPUT_FORMAT}" for name in REQUIRED_TABLES),
+    *(f"{name}.{TABLE_OUTPUT_FORMAT}" for name in REQUIRED_QUANT_TABLES),
     *(f"{stem}.{suffix}" for stem in FIGURE_STEMS for suffix in FIGURE_FORMATS),
 ]
 

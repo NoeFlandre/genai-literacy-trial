@@ -37,6 +37,7 @@ from genai_literacy_trial.quant_schema import (
     PARTICIPANT_KEY_COLUMN,
     PRIVATE_OUTPUT_DIR_KEY,
     PUBLIC_OUTPUT_DIR_KEY,
+    REQUIRED_QUANT_TABLES,
     QuantPathMap,
 )
 from genai_literacy_trial.quant_stats import cronbach_alpha, group_summary_ci, small_sample_sensitivity
@@ -50,27 +51,7 @@ INPUT_READERS: dict[str, Callable[[Path], pd.DataFrame]] = {
     "xlsx": pd.read_excel,
 }
 COMPATIBILITY_INPUT_PREFIX = "public_cli_input_"
-REQUIRED_TABLES = [
-    "table_data_verification",
-    "table_missingness_prompt_by_group_assignment",
-    "table_baseline_balance",
-    "table_prompt_trajectory_model",
-    "table_prompt_trajectory_estimated_means",
-    "table_participant_training_contrasts",
-    "table_participant_training_tests",
-    "table_learning_outcome_models",
-    "table_prompt_grade_correlations",
-    "table_calibration_models",
-    "table_survey_reliability",
-    "table_prepost_survey_change",
-    "table_small_sample_sensitivity",
-    "table_perceived_usefulness_models",
-    "table_complete_case_diagnostics",
-    "table_prior_use_mapping",
-    "table_scored_assignment_distribution_by_group",
-    "table_prompt_sensitivity_min3_assignments",
-    "table_prompt_sensitivity_all4_assignments",
-]
+REQUIRED_TABLES = REQUIRED_QUANT_TABLES
 
 GENERATED_PUBLIC_SUFFIXES = {
     f".{TABLE_OUTPUT_FORMAT}",

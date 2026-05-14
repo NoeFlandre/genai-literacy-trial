@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from genai_literacy_trial.quant_pipeline import REQUIRED_TABLES
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME, REPORT_SECTION_TABLES, write_quantitative_report
+from genai_literacy_trial.quant_schema import REQUIRED_QUANT_TABLES
 
 
 def test_report_contains_required_sections_and_privacy_language(tmp_path: Path) -> None:
@@ -35,7 +35,7 @@ def test_report_contains_required_sections_and_privacy_language(tmp_path: Path) 
 
 
 def test_report_section_table_mapping_references_generated_tables() -> None:
-    assert set(REPORT_SECTION_TABLES.values()).issubset(set(REQUIRED_TABLES))
+    assert set(REPORT_SECTION_TABLES.values()).issubset(set(REQUIRED_QUANT_TABLES))
 
 
 def test_report_lists_itself_as_generated_file(tmp_path: Path) -> None:
