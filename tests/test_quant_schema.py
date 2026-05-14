@@ -4,6 +4,7 @@ from genai_literacy_trial.quant_schema import (
     NORMALIZED_POST_LABEL,
     NORMALIZED_PRE_LABEL,
     PARTICIPANT_KEY_COLUMN,
+    QuantPathMap,
     QuantTableMap,
 )
 
@@ -18,3 +19,9 @@ def test_quant_table_map_type_alias_is_importable() -> None:
     tables: QuantTableMap = {}
 
     assert tables == {}
+
+
+def test_quant_path_map_type_alias_is_importable() -> None:
+    paths: QuantPathMap = {}
+
+    assert paths == {}

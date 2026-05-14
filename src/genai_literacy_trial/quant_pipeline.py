@@ -32,7 +32,7 @@ from genai_literacy_trial.quant_preprocess import (
     validate_analysis_inventory,
 )
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME, write_quantitative_report
-from genai_literacy_trial.quant_schema import NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN
+from genai_literacy_trial.quant_schema import NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN, QuantPathMap
 from genai_literacy_trial.quant_stats import cronbach_alpha, group_summary_ci, small_sample_sensitivity
 
 
@@ -150,7 +150,7 @@ def _reliability(composites_source: pd.DataFrame, config: QuantConfig) -> pd.Dat
     return pd.DataFrame(rows)
 
 
-def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_path: Path | None, output_dir: Path, public_output_dir: Path) -> dict[str, Path]:
+def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_path: Path | None, output_dir: Path, public_output_dir: Path) -> QuantPathMap:
     config = load_quant_config(config_path)
     expected = load_expected_inventory(expected_inventory_path)
     survey, grades, prompts = (_read_input(input_dir, name) for name in INPUT_DATASETS)
