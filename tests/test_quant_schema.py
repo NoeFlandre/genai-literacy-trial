@@ -6,6 +6,7 @@ from genai_literacy_trial.quant_schema import (
     PARTICIPANT_KEY_COLUMN,
     PRIVATE_OUTPUT_DIR_KEY,
     PUBLIC_OUTPUT_DIR_KEY,
+    QUANT_TABLE_OUTPUT_FORMAT,
     REQUIRED_QUANT_TABLES,
     QuantPathMap,
     QuantTableMap,
@@ -45,6 +46,10 @@ def test_required_quant_tables_are_public_output_contract() -> None:
         "table_prompt_sensitivity_min3_assignments",
         "table_prompt_sensitivity_all4_assignments",
     )
+
+
+def test_quant_table_output_format_is_public_output_contract() -> None:
+    assert QUANT_TABLE_OUTPUT_FORMAT == "csv"
 
 
 def test_quant_table_map_type_alias_is_importable() -> None:

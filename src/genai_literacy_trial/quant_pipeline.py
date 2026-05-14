@@ -37,13 +37,14 @@ from genai_literacy_trial.quant_schema import (
     PARTICIPANT_KEY_COLUMN,
     PRIVATE_OUTPUT_DIR_KEY,
     PUBLIC_OUTPUT_DIR_KEY,
+    QUANT_TABLE_OUTPUT_FORMAT,
     REQUIRED_QUANT_TABLES,
     QuantPathMap,
 )
 from genai_literacy_trial.quant_stats import cronbach_alpha, group_summary_ci, small_sample_sensitivity
 
 
-TABLE_OUTPUT_FORMAT = "csv"
+TABLE_OUTPUT_FORMAT = QUANT_TABLE_OUTPUT_FORMAT
 INPUT_DATASETS = ("survey", "grades", "prompts")
 INPUT_FILE_FORMATS = ("csv", "xlsx")
 INPUT_READERS: dict[str, Callable[[Path], pd.DataFrame]] = {

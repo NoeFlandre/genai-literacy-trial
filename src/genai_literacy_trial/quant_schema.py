@@ -9,6 +9,7 @@ NORMALIZED_POST_LABEL = "post"
 PARTICIPANT_KEY_COLUMN = "participant_key"
 PUBLIC_OUTPUT_DIR_KEY = "public_output_dir"
 PRIVATE_OUTPUT_DIR_KEY = "private_output_dir"
+QUANT_TABLE_OUTPUT_FORMAT = "csv"
 REQUIRED_QUANT_TABLES = (
     "table_data_verification",
     "table_missingness_prompt_by_group_assignment",

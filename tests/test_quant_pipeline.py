@@ -11,7 +11,6 @@ from genai_literacy_trial.quant_pipeline import (
     INPUT_DATASETS,
     INPUT_FILE_FORMATS,
     INPUT_READERS,
-    TABLE_OUTPUT_FORMAT,
     _calibration_forest_source,
     _read_input,
     _merge_pre_composites,
@@ -19,7 +18,7 @@ from genai_literacy_trial.quant_pipeline import (
 from genai_literacy_trial.quant_figures import FIGURE_FORMATS
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME
 from genai_literacy_trial.quant_preprocess import compute_survey_composites, participant_key
-from genai_literacy_trial.quant_schema import PARTICIPANT_KEY_COLUMN
+from genai_literacy_trial.quant_schema import PARTICIPANT_KEY_COLUMN, QUANT_TABLE_OUTPUT_FORMAT
 
 
 def test_merge_pre_composites_uses_normalized_pre_phase_from_composites() -> None:
@@ -74,7 +73,7 @@ def test_quant_pipeline_compatibility_input_prefix_is_explicit() -> None:
 
 
 def test_generated_public_suffixes_derive_from_output_contracts() -> None:
-    expected = {f".{TABLE_OUTPUT_FORMAT}", *(f".{suffix}" for suffix in FIGURE_FORMATS), ".md"}
+    expected = {f".{QUANT_TABLE_OUTPUT_FORMAT}", *(f".{suffix}" for suffix in FIGURE_FORMATS), ".md"}
     assert GENERATED_PUBLIC_SUFFIXES == expected
     assert f".{QUANTITATIVE_REPORT_FILENAME.rsplit('.', maxsplit=1)[-1]}" in GENERATED_PUBLIC_SUFFIXES
 
