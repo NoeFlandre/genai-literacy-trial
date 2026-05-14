@@ -8,7 +8,14 @@ import pandas as pd
 from scipy import stats
 import statsmodels.formula.api as smf
 
-from genai_literacy_trial.quant_schema import NORMALIZED_POST_LABEL, NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN, QuantTableMap
+from genai_literacy_trial.quant_schema import (
+    LearningOutcomeTables,
+    NORMALIZED_POST_LABEL,
+    NORMALIZED_PRE_LABEL,
+    PARTICIPANT_KEY_COLUMN,
+    PromptSensitivityTables,
+    TrainingEffectTables,
+)
 from genai_literacy_trial.quant_stats import (
     benjamini_hochberg,
     DEFAULT_SEED,
@@ -208,7 +215,7 @@ def _mean_difference_ci(a: pd.Series, b: pd.Series, seed: int = DEFAULT_SEED, n_
     return {"mean_difference": float(x.mean() - y.mean()), "mean_difference_ci_low": float(np.quantile(boots, 0.025)), "mean_difference_ci_high": float(np.quantile(boots, 0.975))}
 
 
-def participant_level_training_effect(participant_df: pd.DataFrame) -> QuantTableMap:
+def participant_level_training_effect(participant_df: pd.DataFrame) -> TrainingEffectTables:
     participant_df = _canonical_group(participant_df)
     summary = group_summary_ci(participant_df, "group", "mean_prompt_score")
     summary.insert(0, "metric", "mean_prompt_score")
@@ -224,7 +231,7 @@ def participant_level_training_effect(participant_df: pd.DataFrame) -> QuantTabl
     return {"summary": summary, "tests": tests, "contrasts": contrasts}
 
 
-def learning_outcome_models(participant_df: pd.DataFrame) -> QuantTableMap:
+def learning_outcome_models(participant_df: pd.DataFrame) -> LearningOutcomeTables:
     frame = _canonical_group(participant_df)
     frame = _ensure_prior_use_score(frame)
     corrs = []
@@ -383,7 +390,7 @@ def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def prompt_missingness_sensitivity(participant_df: pd.DataFrame, min_all4_n: int = 30) -> QuantTableMap:
+def prompt_missingness_sensitivity(participant_df: pd.DataFrame, min_all4_n: int = 30) -> PromptSensitivityTables:
     frame = _canonical_group(participant_df)
     frame = _ensure_prior_use_score(frame)
     distribution = frame.groupby(["group", "scored_assignments"], dropna=False).size().reset_index(name="n").sort_values(["group", "scored_assignments"])

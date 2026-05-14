@@ -11,8 +11,11 @@ from genai_literacy_trial.quant_schema import (
     PUBLIC_OUTPUT_DIR_KEY,
     QUANT_TABLE_OUTPUT_FORMAT,
     REQUIRED_QUANT_TABLES,
+    LearningOutcomeTables,
+    PromptSensitivityTables,
     QuantPathMap,
     QuantTableMap,
+    TrainingEffectTables,
 )
 
 
@@ -71,4 +74,14 @@ def test_quant_path_map_declares_required_output_paths() -> None:
     assert get_type_hints(QuantPathMap) == {
         PUBLIC_OUTPUT_DIR_KEY: Path,
         PRIVATE_OUTPUT_DIR_KEY: Path,
+    }
+
+
+def test_quant_model_table_maps_declare_required_tables() -> None:
+    assert set(get_type_hints(TrainingEffectTables)) == {"summary", "tests", "contrasts"}
+    assert set(get_type_hints(LearningOutcomeTables)) == {"correlations", "models"}
+    assert set(get_type_hints(PromptSensitivityTables)) == {
+        "scored_assignment_distribution",
+        "min3_assignments",
+        "all4_assignments",
     }

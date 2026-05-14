@@ -39,3 +39,20 @@ QuantTableMap = dict[str, pd.DataFrame]
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path
+
+
+class TrainingEffectTables(TypedDict):
+    summary: pd.DataFrame
+    tests: pd.DataFrame
+    contrasts: pd.DataFrame
+
+
+class LearningOutcomeTables(TypedDict):
+    correlations: pd.DataFrame
+    models: pd.DataFrame
+
+
+class PromptSensitivityTables(TypedDict):
+    scored_assignment_distribution: pd.DataFrame
+    min3_assignments: pd.DataFrame
+    all4_assignments: pd.DataFrame
