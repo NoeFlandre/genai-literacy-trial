@@ -32,7 +32,13 @@ from genai_literacy_trial.quant_preprocess import (
     validate_analysis_inventory,
 )
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME, write_quantitative_report
-from genai_literacy_trial.quant_schema import NORMALIZED_PRE_LABEL, PARTICIPANT_KEY_COLUMN, QuantPathMap
+from genai_literacy_trial.quant_schema import (
+    NORMALIZED_PRE_LABEL,
+    PARTICIPANT_KEY_COLUMN,
+    PRIVATE_OUTPUT_DIR_KEY,
+    PUBLIC_OUTPUT_DIR_KEY,
+    QuantPathMap,
+)
 from genai_literacy_trial.quant_stats import cronbach_alpha, group_summary_ci, small_sample_sensitivity
 
 
@@ -221,4 +227,4 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
     if findings:
         details = "; ".join(f"{f.path}:{f.rule}" for f in findings)
         raise ValueError(f"Privacy audit failed for public outputs: {details}")
-    return {"public_output_dir": public_output_dir, "private_output_dir": output_dir}
+    return {PUBLIC_OUTPUT_DIR_KEY: public_output_dir, PRIVATE_OUTPUT_DIR_KEY: output_dir}

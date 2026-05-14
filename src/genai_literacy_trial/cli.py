@@ -14,6 +14,7 @@ from genai_literacy_trial.analysis import (
 )
 from genai_literacy_trial.privacy import scan_public_tree
 from genai_literacy_trial.quant_pipeline import run_quant_analysis
+from genai_literacy_trial.quant_schema import PUBLIC_OUTPUT_DIR_KEY
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -87,7 +88,7 @@ def analyze_quant(
     public_output_dir: Path = typer.Option(Path("paper_outputs/quantitative"), help="Aggregate-only public output directory."),
 ) -> None:
     paths = run_quant_analysis(input_dir, config, expected_inventory, output_dir, public_output_dir)
-    typer.echo(f"Quantitative analysis complete. Public outputs: {paths['public_output_dir']}")
+    typer.echo(f"Quantitative analysis complete. Public outputs: {paths[PUBLIC_OUTPUT_DIR_KEY]}")
     typer.echo("Privacy audit passed for generated public outputs.")
 
 
