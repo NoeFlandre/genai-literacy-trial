@@ -36,6 +36,13 @@ REQUIRED_QUANT_TABLES = (
 QuantTableMap = dict[str, pd.DataFrame]
 
 
+class BootstrapSummary(TypedDict):
+    mean: float
+    ci_low: float
+    ci_high: float
+    n: int
+
+
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path

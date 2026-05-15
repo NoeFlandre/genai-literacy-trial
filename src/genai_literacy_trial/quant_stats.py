@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from genai_literacy_trial.quant_schema import BootstrapSummary
+
 
 def _clean(values: pd.Series | np.ndarray) -> np.ndarray:
     return pd.Series(values).dropna().astype(float).to_numpy()
@@ -14,7 +16,7 @@ def _clean(values: pd.Series | np.ndarray) -> np.ndarray:
 DEFAULT_SEED = int("2026" + "0615")
 
 
-def mean_ci_bootstrap(values: pd.Series | np.ndarray, seed: int = DEFAULT_SEED, n_boot: int = 10000) -> dict[str, float]:
+def mean_ci_bootstrap(values: pd.Series | np.ndarray, seed: int = DEFAULT_SEED, n_boot: int = 10000) -> BootstrapSummary:
     arr = _clean(values)
     if len(arr) == 0:
         return {"mean": math.nan, "ci_low": math.nan, "ci_high": math.nan, "n": 0}

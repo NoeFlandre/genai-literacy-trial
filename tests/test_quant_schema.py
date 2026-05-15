@@ -11,6 +11,7 @@ from genai_literacy_trial.quant_schema import (
     PUBLIC_OUTPUT_DIR_KEY,
     QUANT_TABLE_OUTPUT_FORMAT,
     REQUIRED_QUANT_TABLES,
+    BootstrapSummary,
     LearningOutcomeTables,
     PromptSensitivityTables,
     QuantPathMap,
@@ -84,4 +85,13 @@ def test_quant_model_table_maps_declare_required_tables() -> None:
         "scored_assignment_distribution",
         "min3_assignments",
         "all4_assignments",
+    }
+
+
+def test_bootstrap_summary_declares_statistical_result_shape() -> None:
+    assert get_type_hints(BootstrapSummary) == {
+        "mean": float,
+        "ci_low": float,
+        "ci_high": float,
+        "n": int,
     }
