@@ -123,6 +123,10 @@ def test_build_paper_aggregates_uses_only_safe_aggregate_tables() -> None:
     assert stats_table.loc["prompt_score_grade_final_n", "observed"] == 3
 
 
+def test_build_paper_aggregates_uses_shared_table_map_contract() -> None:
+    assert build_paper_aggregates.__annotations__["return"] == "QuantTableMap"
+
+
 def test_validate_against_targets_flags_mismatches_without_mutating_targets() -> None:
     observed = {
         "retained_students": 44,

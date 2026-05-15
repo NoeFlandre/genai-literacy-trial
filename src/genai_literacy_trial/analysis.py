@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from genai_literacy_trial.quant_schema import QuantTableMap
 from genai_literacy_trial.scales import GRADE_POINTS, LIKERT_POINTS
 
 PROMPT_SCORE_COLUMN = "Student prompting quality score (1 bad - 5 best)"
@@ -123,7 +124,7 @@ def build_paper_aggregates(
     survey: pd.DataFrame,
     prompts: pd.DataFrame,
     grades: pd.DataFrame,
-) -> dict[str, pd.DataFrame]:
+) -> QuantTableMap:
     prompt_scores = mean_prompt_scores(prompts)
     grade_frame = grades[["Email", "Group", "Midterm Grade", "Final Grade"]].copy()
     grade_frame["midterm_points"] = grade_frame["Midterm Grade"].map(convert_letter_grade)
