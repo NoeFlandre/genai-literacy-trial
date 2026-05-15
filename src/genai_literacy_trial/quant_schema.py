@@ -56,6 +56,12 @@ class CorrelationResult(TypedDict):
     n: int
 
 
+class EffectSizeResult(TypedDict):
+    estimate: float
+    ci_low: float
+    ci_high: float
+
+
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path

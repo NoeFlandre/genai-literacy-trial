@@ -13,6 +13,7 @@ from genai_literacy_trial.quant_schema import (
     REQUIRED_QUANT_TABLES,
     BootstrapSummary,
     CorrelationResult,
+    EffectSizeResult,
     LearningOutcomeTables,
     PromptSensitivityTables,
     QuantPathMap,
@@ -113,4 +114,12 @@ def test_correlation_result_declares_common_correlation_shape() -> None:
         "ci_low": float,
         "ci_high": float,
         "n": int,
+    }
+
+
+def test_effect_size_result_declares_common_effect_size_shape() -> None:
+    assert get_type_hints(EffectSizeResult) == {
+        "estimate": float,
+        "ci_low": float,
+        "ci_high": float,
     }

@@ -6,7 +6,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from genai_literacy_trial.quant_schema import BootstrapSummary, CorrelationResult, StatisticalTestResult
+from genai_literacy_trial.quant_schema import (
+    BootstrapSummary,
+    CorrelationResult,
+    EffectSizeResult,
+    StatisticalTestResult,
+)
 
 
 def _clean(values: pd.Series | np.ndarray) -> np.ndarray:
@@ -95,7 +100,12 @@ def permutation_anova(
     return {"statistic": float(observed), "p_value": float((count + 1) / (n_perm + 1))}
 
 
-def hedges_g(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray, seed: int = DEFAULT_SEED, n_boot: int = 10000) -> dict[str, float]:
+def hedges_g(
+    x: pd.Series | np.ndarray,
+    y: pd.Series | np.ndarray,
+    seed: int = DEFAULT_SEED,
+    n_boot: int = 10000,
+) -> EffectSizeResult:
     a, b = _clean(x), _clean(y)
     def calc(u: np.ndarray, v: np.ndarray) -> float:
         if len(u) < 2 or len(v) < 2:
