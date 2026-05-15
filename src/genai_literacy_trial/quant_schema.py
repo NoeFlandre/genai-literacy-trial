@@ -75,6 +75,18 @@ class MeanDifferenceResult(TypedDict):
     mean_difference_ci_high: float
 
 
+class TrainingContrastRow(TypedDict):
+    contrast: str
+    mean_difference: float
+    mean_difference_ci_low: float
+    mean_difference_ci_high: float
+    hedges_g: float
+    hedges_g_ci_low: float
+    hedges_g_ci_high: float
+    p_value: float
+    n: int
+
+
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path

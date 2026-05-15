@@ -22,6 +22,7 @@ from genai_literacy_trial.quant_schema import (
     StatisticalTestResult,
     SmallSampleSensitivityResult,
     TrainingEffectTables,
+    TrainingContrastRow,
 )
 
 
@@ -141,4 +142,18 @@ def test_mean_difference_result_declares_contrast_ci_shape() -> None:
         "mean_difference": float,
         "mean_difference_ci_low": float,
         "mean_difference_ci_high": float,
+    }
+
+
+def test_training_contrast_row_declares_public_contrast_table_shape() -> None:
+    assert get_type_hints(TrainingContrastRow) == {
+        "contrast": str,
+        "mean_difference": float,
+        "mean_difference_ci_low": float,
+        "mean_difference_ci_high": float,
+        "hedges_g": float,
+        "hedges_g_ci_low": float,
+        "hedges_g_ci_high": float,
+        "p_value": float,
+        "n": int,
     }

@@ -15,6 +15,7 @@ from genai_literacy_trial.quant_schema import (
     NORMALIZED_PRE_LABEL,
     PARTICIPANT_KEY_COLUMN,
     PromptSensitivityTables,
+    TrainingContrastRow,
     TrainingEffectTables,
 )
 from genai_literacy_trial.quant_stats import (
@@ -173,7 +174,7 @@ def estimate_prompt_trajectory_means(assignment_df: pd.DataFrame, model_result: 
     return pd.DataFrame(rows).sort_values(["group", "assignment"])
 
 
-def _contrast_rows(df: pd.DataFrame, value: str) -> list[dict[str, float | str]]:
+def _contrast_rows(df: pd.DataFrame, value: str) -> list[TrainingContrastRow]:
     rows = []
     pairs = [("C", "A"), ("C", "B"), ("B", "A")]
     pooled = df.assign(group_pooled=np.where(df["group"] == "C", "C", "pooled_A_B"))
