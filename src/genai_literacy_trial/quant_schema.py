@@ -69,6 +69,12 @@ class SmallSampleSensitivityResult(TypedDict):
     interpretation: str
 
 
+class MeanDifferenceResult(TypedDict):
+    mean_difference: float
+    mean_difference_ci_low: float
+    mean_difference_ci_high: float
+
+
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path

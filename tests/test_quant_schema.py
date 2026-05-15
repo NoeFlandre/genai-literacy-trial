@@ -15,6 +15,7 @@ from genai_literacy_trial.quant_schema import (
     CorrelationResult,
     EffectSizeResult,
     LearningOutcomeTables,
+    MeanDifferenceResult,
     PromptSensitivityTables,
     QuantPathMap,
     QuantTableMap,
@@ -132,4 +133,12 @@ def test_small_sample_sensitivity_result_declares_output_shape() -> None:
         "detectable_d_c_vs_pooled_ab_80_power": float,
         "detectable_r_n45_80_power": float,
         "interpretation": str,
+    }
+
+
+def test_mean_difference_result_declares_contrast_ci_shape() -> None:
+    assert get_type_hints(MeanDifferenceResult) == {
+        "mean_difference": float,
+        "mean_difference_ci_low": float,
+        "mean_difference_ci_high": float,
     }

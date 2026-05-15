@@ -10,6 +10,7 @@ import statsmodels.formula.api as smf
 
 from genai_literacy_trial.quant_schema import (
     LearningOutcomeTables,
+    MeanDifferenceResult,
     NORMALIZED_POST_LABEL,
     NORMALIZED_PRE_LABEL,
     PARTICIPANT_KEY_COLUMN,
@@ -205,7 +206,7 @@ def _contrast_rows(df: pd.DataFrame, value: str) -> list[dict[str, float | str]]
     return rows
 
 
-def _mean_difference_ci(a: pd.Series, b: pd.Series, seed: int = DEFAULT_SEED, n_boot: int = 1000) -> dict[str, float]:
+def _mean_difference_ci(a: pd.Series, b: pd.Series, seed: int = DEFAULT_SEED, n_boot: int = 1000) -> MeanDifferenceResult:
     x = pd.Series(a).dropna().astype(float).to_numpy()
     y = pd.Series(b).dropna().astype(float).to_numpy()
     if len(x) == 0 or len(y) == 0:
