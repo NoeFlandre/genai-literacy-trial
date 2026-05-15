@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from genai_literacy_trial.quant_schema import BootstrapSummary
+from genai_literacy_trial.quant_schema import BootstrapSummary, StatisticalTestResult
 
 
 def _clean(values: pd.Series | np.ndarray) -> np.ndarray:
@@ -35,7 +35,7 @@ def group_summary_ci(df: pd.DataFrame, group_col: str, value_col: str) -> pd.Dat
     return pd.DataFrame(rows)[["group", "n", "mean", "sd", "ci_low", "ci_high"]]
 
 
-def welch_anova(df: pd.DataFrame, group_col: str, value_col: str) -> dict[str, float]:
+def welch_anova(df: pd.DataFrame, group_col: str, value_col: str) -> StatisticalTestResult:
     groups = [_clean(g[value_col]) for _, g in df.groupby(group_col, sort=True)]
     groups = [g for g in groups if len(g)]
     if len(groups) < 2:
@@ -61,7 +61,7 @@ def welch_anova(df: pd.DataFrame, group_col: str, value_col: str) -> dict[str, f
     return {"statistic": float(statistic), "p_value": float(stats.f.sf(statistic, df_num, df_den))}
 
 
-def kruskal_test(df: pd.DataFrame, group_col: str, value_col: str) -> dict[str, float]:
+def kruskal_test(df: pd.DataFrame, group_col: str, value_col: str) -> StatisticalTestResult:
     groups = [_clean(g[value_col]) for _, g in df.groupby(group_col, sort=True)]
     groups = [g for g in groups if len(g)]
     if len(groups) < 2:
@@ -70,7 +70,13 @@ def kruskal_test(df: pd.DataFrame, group_col: str, value_col: str) -> dict[str, 
     return {"statistic": float(res.statistic), "p_value": float(res.pvalue)}
 
 
-def permutation_anova(df: pd.DataFrame, group_col: str, value_col: str, seed: int = DEFAULT_SEED, n_perm: int = 2000) -> dict[str, float]:
+def permutation_anova(
+    df: pd.DataFrame,
+    group_col: str,
+    value_col: str,
+    seed: int = DEFAULT_SEED,
+    n_perm: int = 2000,
+) -> StatisticalTestResult:
     frame = df[[group_col, value_col]].dropna()
     if frame[group_col].nunique() < 2:
         return {"statistic": math.nan, "p_value": math.nan}

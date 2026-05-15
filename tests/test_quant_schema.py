@@ -16,6 +16,7 @@ from genai_literacy_trial.quant_schema import (
     PromptSensitivityTables,
     QuantPathMap,
     QuantTableMap,
+    StatisticalTestResult,
     TrainingEffectTables,
 )
 
@@ -94,4 +95,11 @@ def test_bootstrap_summary_declares_statistical_result_shape() -> None:
         "ci_low": float,
         "ci_high": float,
         "n": int,
+    }
+
+
+def test_statistical_test_result_declares_common_test_shape() -> None:
+    assert get_type_hints(StatisticalTestResult) == {
+        "statistic": float,
+        "p_value": float,
     }

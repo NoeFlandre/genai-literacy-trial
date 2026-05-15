@@ -43,6 +43,11 @@ class BootstrapSummary(TypedDict):
     n: int
 
 
+class StatisticalTestResult(TypedDict):
+    statistic: float
+    p_value: float
+
+
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path
