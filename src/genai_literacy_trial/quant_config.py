@@ -3,10 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
+from typing import TypedDict
 
 from genai_literacy_trial.scales import GRADE_POINTS, LIKERT_POINTS
 
-ExpectedInventory = dict[str, object]
+
+class ExpectedInventory(TypedDict, total=False):
+    pre_responses: int
+    post_responses: int
+    retained_participants: int
+    retained_survey_rows: int
+    prompt_assignment_rows: int
+    scored_prompt_observations: int
+    missing_prompt_scores: int
+    group_counts: dict[str, int]
 
 
 @dataclass(frozen=True)

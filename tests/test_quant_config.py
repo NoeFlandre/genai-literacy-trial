@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import get_type_hints
 
 from genai_literacy_trial.quant_config import ExpectedInventory, QuantConfig, load_expected_inventory, load_quant_config
 
@@ -21,3 +22,16 @@ def test_expected_inventory_type_contract_is_explicit() -> None:
     expected: ExpectedInventory = load_expected_inventory(None)
 
     assert expected == {}
+
+
+def test_expected_inventory_declares_known_inventory_keys() -> None:
+    assert get_type_hints(ExpectedInventory) == {
+        "pre_responses": int,
+        "post_responses": int,
+        "retained_participants": int,
+        "retained_survey_rows": int,
+        "prompt_assignment_rows": int,
+        "scored_prompt_observations": int,
+        "missing_prompt_scores": int,
+        "group_counts": dict[str, int],
+    }
