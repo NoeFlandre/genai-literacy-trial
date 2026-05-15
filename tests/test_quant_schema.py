@@ -12,6 +12,7 @@ from genai_literacy_trial.quant_schema import (
     QUANT_TABLE_OUTPUT_FORMAT,
     REQUIRED_QUANT_TABLES,
     BootstrapSummary,
+    CorrelationResult,
     LearningOutcomeTables,
     PromptSensitivityTables,
     QuantPathMap,
@@ -102,4 +103,14 @@ def test_statistical_test_result_declares_common_test_shape() -> None:
     assert get_type_hints(StatisticalTestResult) == {
         "statistic": float,
         "p_value": float,
+    }
+
+
+def test_correlation_result_declares_common_correlation_shape() -> None:
+    assert get_type_hints(CorrelationResult) == {
+        "correlation": float,
+        "p_value": float,
+        "ci_low": float,
+        "ci_high": float,
+        "n": int,
     }

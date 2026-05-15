@@ -48,6 +48,14 @@ class StatisticalTestResult(TypedDict):
     p_value: float
 
 
+class CorrelationResult(TypedDict):
+    correlation: float
+    p_value: float
+    ci_low: float
+    ci_high: float
+    n: int
+
+
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path

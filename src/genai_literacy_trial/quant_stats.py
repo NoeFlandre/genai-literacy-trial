@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from genai_literacy_trial.quant_schema import BootstrapSummary, StatisticalTestResult
+from genai_literacy_trial.quant_schema import BootstrapSummary, CorrelationResult, StatisticalTestResult
 
 
 def _clean(values: pd.Series | np.ndarray) -> np.ndarray:
@@ -115,7 +115,7 @@ def hedges_g(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray, seed: int = D
     return {"estimate": estimate, "ci_low": float(np.quantile(boots, 0.025)), "ci_high": float(np.quantile(boots, 0.975))}
 
 
-def pearson_with_fisher_ci(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray) -> dict[str, float]:
+def pearson_with_fisher_ci(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray) -> CorrelationResult:
     frame = pd.DataFrame({"x": x, "y": y}).dropna()
     n = len(frame)
     if n < 4:
@@ -127,7 +127,12 @@ def pearson_with_fisher_ci(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray)
     return {"correlation": float(r), "p_value": float(p), "ci_low": float(np.tanh(z - 1.96 * se)), "ci_high": float(np.tanh(z + 1.96 * se)), "n": n}
 
 
-def spearman_with_ci(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray, seed: int = DEFAULT_SEED, n_boot: int = 10000) -> dict[str, float]:
+def spearman_with_ci(
+    x: pd.Series | np.ndarray,
+    y: pd.Series | np.ndarray,
+    seed: int = DEFAULT_SEED,
+    n_boot: int = 10000,
+) -> CorrelationResult:
     frame = pd.DataFrame({"x": x, "y": y}).dropna()
     if len(frame) < 3:
         return {"correlation": math.nan, "p_value": math.nan, "ci_low": math.nan, "ci_high": math.nan, "n": len(frame)}
