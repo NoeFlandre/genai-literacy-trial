@@ -16,6 +16,7 @@ from genai_literacy_trial.quant_schema import (
     EffectSizeResult,
     LearningOutcomeTables,
     MeanDifferenceResult,
+    ModelDiagnosticsRow,
     PromptSensitivityTables,
     QuantPathMap,
     QuantTableMap,
@@ -156,4 +157,19 @@ def test_training_contrast_row_declares_public_contrast_table_shape() -> None:
         "hedges_g_ci_high": float,
         "p_value": float,
         "n": int,
+    }
+
+
+def test_model_diagnostics_row_declares_complete_case_audit_shape() -> None:
+    assert get_type_hints(ModelDiagnosticsRow) == {
+        "model": str,
+        "starting_n": int,
+        "final_n": int,
+        "loss_type": str,
+        "lost_final_grade": int,
+        "lost_midterm_grade": int,
+        "lost_mean_prompt_score": int,
+        "lost_prior_chatgpt_use_score": int,
+        "lost_survey_composite": int,
+        "lost_group": int,
     }

@@ -11,6 +11,7 @@ import statsmodels.formula.api as smf
 from genai_literacy_trial.quant_schema import (
     LearningOutcomeTables,
     MeanDifferenceResult,
+    ModelDiagnosticsRow,
     NORMALIZED_POST_LABEL,
     NORMALIZED_PRE_LABEL,
     PARTICIPANT_KEY_COLUMN,
@@ -130,9 +131,14 @@ def _add_standardized_effect(
     return out
 
 
-def _model_diagnostics(frame: pd.DataFrame, model: str, required: list[str], survey_composite: str | None = None) -> dict[str, int | str]:
+def _model_diagnostics(
+    frame: pd.DataFrame,
+    model: str,
+    required: list[str],
+    survey_composite: str | None = None,
+) -> ModelDiagnosticsRow:
     grade_change_required = "grade_change" in required
-    out: dict[str, int | str] = {
+    out: ModelDiagnosticsRow = {
         "model": model,
         "starting_n": int(len(frame)),
         "final_n": int(len(frame.dropna(subset=required))),

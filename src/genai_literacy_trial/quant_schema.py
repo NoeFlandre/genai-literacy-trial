@@ -87,6 +87,19 @@ class TrainingContrastRow(TypedDict):
     n: int
 
 
+class ModelDiagnosticsRow(TypedDict):
+    model: str
+    starting_n: int
+    final_n: int
+    loss_type: str
+    lost_final_grade: int
+    lost_midterm_grade: int
+    lost_mean_prompt_score: int
+    lost_prior_chatgpt_use_score: int
+    lost_survey_composite: int
+    lost_group: int
+
+
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path
