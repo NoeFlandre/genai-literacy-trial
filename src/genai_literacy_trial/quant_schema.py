@@ -62,6 +62,13 @@ class EffectSizeResult(TypedDict):
     ci_high: float
 
 
+class SmallSampleSensitivityResult(TypedDict):
+    detectable_d_a_vs_b_80_power: float
+    detectable_d_c_vs_pooled_ab_80_power: float
+    detectable_r_n45_80_power: float
+    interpretation: str
+
+
 class QuantPathMap(TypedDict):
     public_output_dir: Path
     private_output_dir: Path

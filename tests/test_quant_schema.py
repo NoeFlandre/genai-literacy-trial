@@ -19,6 +19,7 @@ from genai_literacy_trial.quant_schema import (
     QuantPathMap,
     QuantTableMap,
     StatisticalTestResult,
+    SmallSampleSensitivityResult,
     TrainingEffectTables,
 )
 
@@ -122,4 +123,13 @@ def test_effect_size_result_declares_common_effect_size_shape() -> None:
         "estimate": float,
         "ci_low": float,
         "ci_high": float,
+    }
+
+
+def test_small_sample_sensitivity_result_declares_output_shape() -> None:
+    assert get_type_hints(SmallSampleSensitivityResult) == {
+        "detectable_d_a_vs_b_80_power": float,
+        "detectable_d_c_vs_pooled_ab_80_power": float,
+        "detectable_r_n45_80_power": float,
+        "interpretation": str,
     }

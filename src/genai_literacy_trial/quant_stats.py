@@ -10,6 +10,7 @@ from genai_literacy_trial.quant_schema import (
     BootstrapSummary,
     CorrelationResult,
     EffectSizeResult,
+    SmallSampleSensitivityResult,
     StatisticalTestResult,
 )
 
@@ -196,7 +197,7 @@ def standardize_series(series: pd.Series) -> pd.Series:
     return (s - s.mean()) / sd
 
 
-def small_sample_sensitivity(n_a: int = 13, n_b: int = 13, n_c: int = 19) -> dict[str, float | str]:
+def small_sample_sensitivity(n_a: int = 13, n_b: int = 13, n_c: int = 19) -> SmallSampleSensitivityResult:
     z = stats.norm.ppf(0.975) + stats.norm.ppf(0.80)
     d_ab = z * math.sqrt(1 / n_a + 1 / n_b)
     pooled = n_a + n_b
