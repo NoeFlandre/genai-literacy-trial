@@ -43,10 +43,10 @@ def plot_prompt_quality_trajectory(table: pd.DataFrame, output_dir: Path) -> lis
 
 def plot_learning_outcome(table: pd.DataFrame, output_dir: Path) -> list[Path]:
     fig, ax = plt.subplots(figsize=(4.8, 3.2))
-    ax.plot(table["mean_prompt_score"], table["predicted_final_points"], color="black")
-    ax.fill_between(table["mean_prompt_score"], table["ci_low"], table["ci_high"], color="0.8")
-    ax.set_xlabel("Mean prompt quality")
-    ax.set_ylabel("Predicted final grade points")
+    ax.plot(table["midterm_points"], table["predicted_mean_prompt_score"], color="black")
+    ax.fill_between(table["midterm_points"], table["ci_low"], table["ci_high"], color="0.8")
+    ax.set_xlabel("Midterm grade points")
+    ax.set_ylabel("Predicted mean prompt quality")
     ax.grid(alpha=0.2)
     return _save(fig, output_dir, LEARNING_OUTCOME_FIGURE)
 

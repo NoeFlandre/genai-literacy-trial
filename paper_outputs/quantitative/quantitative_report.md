@@ -131,13 +131,12 @@ Missing-prompt sensitivity, at least three scored assignments:
 
 | model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| min3_scored_assignments | Intercept | 0.9797177363689489 | -1.697965309241749 | 3.657400781979647 | 0.473302034773077 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
-| min3_scored_assignments | group[T.B] | -0.18134022281595652 | -0.7634602684985012 | 0.4007798228665882 | 0.5414896698894691 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
-| min3_scored_assignments | group[T.C] | -0.10105386841691844 | -0.6579496309885836 | 0.45584189415474674 | 0.7221000517073881 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
-| min3_scored_assignments | mean_prompt_score | 0.34796296028521173 | -0.06832207554907616 | 0.7642479961194997 | 0.10136158400429784 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
-| min3_scored_assignments | midterm_points | 0.5317877738302725 | 0.2943585252459223 | 0.7692170224146228 | 1.1341548181384073e-05 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
-| min3_scored_assignments | prior_chatgpt_use_score | -0.09212076075535752 | -0.3030527841676346 | 0.11881126265691952 | 0.39200941933267763 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
-| min3_scored_assignments | scored_assignments | -0.11141660298969702 | -0.6308014139027032 | 0.4079682079233091 | 0.6741607064265547 | 36 | 0.5609622625260904 | 0.4701268685659712 | standard | run |
+| min3_scored_assignments | Intercept | 4.057469282257648 | 1.5252411652870665 | 6.589697399228228 | 0.0016865259939179 | 36 | 0.3969975468230449 | 0.29649713796021904 | standard | run |
+| min3_scored_assignments | group[T.B] | 0.1510860655118068 | -0.5339458583299789 | 0.8361179893535925 | 0.6655404175998534 | 36 | 0.3969975468230449 | 0.29649713796021904 | standard | run |
+| min3_scored_assignments | group[T.C] | 0.8989003206393011 | 0.5235647162002826 | 1.2742359250783197 | 2.6795967664027282e-06 | 36 | 0.3969975468230449 | 0.29649713796021904 | standard | run |
+| min3_scored_assignments | midterm_points | 0.2537771669414438 | 0.026129534546547817 | 0.4814247993363398 | 0.0288939904747353 | 36 | 0.3969975468230449 | 0.29649713796021904 | standard | run |
+| min3_scored_assignments | prior_chatgpt_use_score | -0.13327975015924537 | -0.3585823210714001 | 0.09202282075290932 | 0.24627923564129395 | 36 | 0.3969975468230449 | 0.29649713796021904 | standard | run |
+| min3_scored_assignments | scored_assignments | -0.4163969057122807 | -0.9641106469959194 | 0.13131683557135798 | 0.13621009195756512 | 36 | 0.3969975468230449 | 0.29649713796021904 | standard | run |
 
 Missing-prompt sensitivity, all four scored assignments:
 
@@ -154,39 +153,21 @@ Missing-prompt sensitivity, all four scored assignments:
 | mean_prompt_score vs final_points | pearson | 0.45083562044288217 | 0.0018836739698695657 | 0.18128787455283193 | 0.6573785571662835 | 45 |
 | mean_prompt_score vs final_points | spearman | 0.43010029288537976 | 0.003189561014732064 | 0.17429923453041288 | 0.6309697654949358 | 45 |
 
-Adjusted learning-outcome models:
+Adjusted prompt-quality predictor model; outcome is mean prompt quality and predictors are midterm grade, section/training condition, and prior ChatGPT use:
 
 | model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | std_beta |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| final_points | Intercept | 1.1435457475586652 | -0.05960989158135099 | 2.3467013866986814 | 0.062482203718806945 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | nan |
-| final_points | group[T.B] | -0.0035650395777174215 | -0.5768557301758019 | 0.569725651020367 | 0.99027550928022 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | nan |
-| final_points | group[T.C] | 0.012521747234972042 | -0.4261201260570112 | 0.45116362052695536 | 0.9553813469175843 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | nan |
-| final_points | mean_prompt_score | 0.25582608780811134 | -0.029256556253143273 | 0.5409087318693659 | 0.07860757267438812 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | 0.30805577285504626 |
-| final_points | midterm_points | 0.40979365185129896 | 0.055432090208506146 | 0.7641552134940918 | 0.02341728058288702 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | 0.4832677530153335 |
-| final_points | prior_chatgpt_use_score | -0.09309271819311192 | -0.2472730825666279 | 0.061087646180404034 | 0.23664723588723158 | 45 | 0.4395618991919227 | 0.3677108606267846 | standard | -0.1542162958707832 |
-| grade_change | Intercept | 0.09903405056080139 | -0.9564467693830672 | 1.15451487050467 | 0.8540917193223658 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | nan |
-| grade_change | group[T.B] | 0.05010893621778689 | -0.69427167676711 | 0.7944895492026838 | 0.8950337344395976 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | nan |
-| grade_change | group[T.C] | 0.07621476762795129 | -0.38160223154864714 | 0.5340317668045498 | 0.7442097604600415 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | nan |
-| grade_change | mean_prompt_score | 0.08063477075577166 | -0.27675254120140946 | 0.43802208271295273 | 0.6583352190202755 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | 0.0951208795603405 |
-| grade_change | prior_chatgpt_use_score | -0.09845312043876123 | -0.28671696022428383 | 0.08981071934676138 | 0.3053778887328493 | 45 | 0.03730780541396683 | -0.05896141404463662 | standard | -0.1597765433733991 |
+| prompt_quality_academic_predictors | Intercept | 2.297390183781004 | 1.2871797482688985 | 3.307600619293109 | 8.300184305770488e-06 | 45 | 0.2067272793213848 | 0.12740000725352318 | standard | nan |
+| prompt_quality_academic_predictors | group[T.B] | 0.06809437483671127 | -0.5349285535124471 | 0.6711173031858695 | 0.8248413574852788 | 45 | 0.2067272793213848 | 0.12740000725352318 | standard | nan |
+| prompt_quality_academic_predictors | group[T.C] | 0.6468769557863123 | 0.16634214210084475 | 1.12741176947178 | 0.008329188202719065 | 45 | 0.2067272793213848 | 0.12740000725352318 | standard | nan |
+| prompt_quality_academic_predictors | midterm_points | 0.26867295611175784 | 0.04511078331004398 | 0.4922351289134717 | 0.01850033164752522 | 45 | 0.2067272793213848 | 0.12740000725352318 | standard | 0.2631249447702726 |
+| prompt_quality_academic_predictors | prior_chatgpt_use_score | -0.033220583432162956 | -0.23747559850682176 | 0.17103443164249582 | 0.7498980481092452 | 45 | 0.2067272793213848 | 0.12740000725352318 | standard | -0.045702219244288265 |
 
-Complete-case diagnostics; loss columns are marginal and non-additive:
+Complete-case diagnostics for the adjusted prompt-quality predictor model; loss columns are marginal and non-additive:
 
 | model | starting_n | final_n | loss_type | lost_final_grade | lost_midterm_grade | lost_mean_prompt_score | lost_prior_chatgpt_use_score | lost_survey_composite | lost_group |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| final_points | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| grade_change | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| perceived_usefulness_final_points | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| perceived_usefulness_grade_change | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_trust | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_perceived_usefulness | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_perceived_ease_of_use | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_behavioral_intention | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_hedonic_motivation | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_locus_of_control | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_facilitating_conditions | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_social_influence | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
-| calibration_attitude | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
+| prompt_quality_academic_predictors | 45 | 45 | marginal_non_additive | 0 | 0 | 0 | 0 | 0 | 0 |
 
 Prior ChatGPT-use coding:
 
@@ -197,13 +178,6 @@ Prior ChatGPT-use coding:
 | Never | suppressed | 1.0 | mapped |
 | Several days each week | 10 | 5.0 | mapped |
 | Several times per semester | 19 | 3.0 | mapped |
-
-Targeted perceived-usefulness models:
-
-| model | term | estimate | ci_low | ci_high | p_value | n | r_squared | adj_r_squared | stability | std_beta | std_ci_low | std_ci_high |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| final_points | perceived_usefulness_z | -0.05101871741598929 | -0.26804868760544326 | 0.16601125277346468 | 0.6449836317911224 | 45 | 0.36716564037816957 | 0.2860330301702426 | standard | -0.07102114720357074 | -0.3731400212382424 | 0.23109772683110097 |
-| grade_change | perceived_usefulness_z | 0.15226785806393336 | -0.060479601997334625 | 0.3650153181252014 | 0.16068015924388312 | 45 | 0.05788777729214656 | -0.03632344497863893 | standard | 0.20765163974589673 | -0.08247760680164475 | 0.49778088629343825 |
 
 ## Calibration: Beliefs vs Actual Prompt Skill
 
@@ -257,8 +231,8 @@ Survey reliability:
 
 The quantitative pipeline retained 45 participants and 90 paired survey rows. Prompt analyses used 144 scored assignment observations for assignment-level models. Prompt-grade relationships were evaluated at the participant level, and the old duplicated n=90 prompt-grade p-values were not used.
 At the participant level, mean prompt quality was higher for Group C than pooled Groups A and B (mean difference=0.637, Hedges g=0.77, 95% CI for g [0.176, 1.67], n=45).
-Mean prompt quality was associated with final grade in the participant-level descriptive analysis (Pearson r=0.451, 95% CI [0.181, 0.657], p=0.00188, n=45).
-The targeted adjusted model did not support a strong participant-level negative association between pre-test perceived usefulness and final grade (standardized beta=-0.071, 95% CI [-0.373, 0.231], p=0.645, n=45).
+Mean prompt quality was descriptively compared with midterm grade as the early-course academic performance measure (Pearson r=0.289, 95% CI [-0.00524, 0.537], p=0.0544, n=45).
+In the adjusted model requested for academic predictors of prompt quality, mean prompt quality was predicted from midterm grade, section, and prior ChatGPT use (midterm coefficient=0.269, 95% CI [0.0451, 0.492], p=0.0185, n=45).
 Small-sample sensitivity indicates that the study is powered only for relatively large effects (approximate 80% detectable d for A vs B=1.1).
 
 ## Files Generated
@@ -288,6 +262,7 @@ Small-sample sensitivity indicates that the study is powered only for relatively
 - `fig_prompt_quality_learning_outcome.png`
 - `fig_calibration_forest.pdf`
 - `fig_calibration_forest.png`
+- `quantitative_report.md`
 
 ## Privacy Verification
 

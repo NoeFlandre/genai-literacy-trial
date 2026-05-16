@@ -73,15 +73,15 @@ def _manuscript_paragraphs(tables: QuantTableMap) -> list[str]:
     verification = tables.get("table_data_verification", pd.DataFrame())
     contrasts = tables.get("table_participant_training_contrasts", pd.DataFrame())
     corr = tables.get("table_prompt_grade_correlations", pd.DataFrame())
-    perceived = tables.get("table_perceived_usefulness_models", pd.DataFrame())
+    learning_models = tables.get("table_learning_outcome_models", pd.DataFrame())
     sensitivity = tables.get("table_small_sample_sensitivity", pd.DataFrame())
 
     retained = _first_row(verification, metric="retained_participants")
     survey_rows = _first_row(verification, metric="retained_survey_rows")
     prompt_rows = _first_row(verification, metric="scored_prompt_observations")
     c_pooled = _first_row(contrasts, contrast="C vs pooled A+B")
-    final_corr = _first_row(corr, metric="mean_prompt_score vs final_points", method="pearson")
-    usefulness_final = _first_row(perceived, model="final_points")
+    midterm_corr = _first_row(corr, metric="mean_prompt_score vs midterm_points", method="pearson")
+    midterm_model = _first_row(learning_models, model="prompt_quality_academic_predictors", term="midterm_points")
     detect_d = None if sensitivity.empty else sensitivity.iloc[0]
 
     lines = [
@@ -97,19 +97,24 @@ def _manuscript_paragraphs(tables: QuantTableMap) -> list[str]:
             f"(mean difference={_fmt(c_pooled['mean_difference'])}, Hedges g={_fmt(c_pooled['hedges_g'])}, "
             f"95% CI for g [{_fmt(c_pooled['hedges_g_ci_low'])}, {_fmt(c_pooled['hedges_g_ci_high'])}], n={_fmt(c_pooled['n'], 0)})."
         )
-    if final_corr is not None:
-        corr_value = final_corr["correlation"] if "correlation" in final_corr.index else final_corr.get("estimate")
+    if midterm_corr is not None:
+        corr_value = midterm_corr["correlation"] if "correlation" in midterm_corr.index else midterm_corr.get("estimate")
         lines.append(
-            "Mean prompt quality was associated with final grade in the participant-level descriptive analysis "
-            f"(Pearson r={_fmt(corr_value)}, 95% CI [{_fmt(final_corr['ci_low'])}, {_fmt(final_corr['ci_high'])}], "
-            f"p={_fmt(final_corr['p_value'])}, n={_fmt(final_corr['n'], 0)})."
+            "Mean prompt quality was descriptively compared with midterm grade as the early-course academic performance measure "
+            f"(Pearson r={_fmt(corr_value)}, 95% CI [{_fmt(midterm_corr['ci_low'])}, {_fmt(midterm_corr['ci_high'])}], "
+            f"p={_fmt(midterm_corr['p_value'])}, n={_fmt(midterm_corr['n'], 0)})."
         )
-    if usefulness_final is not None:
-        lines.append(
-            "The targeted adjusted model did not support a strong participant-level negative association between pre-test perceived usefulness and final grade "
-            f"(standardized beta={_fmt(usefulness_final['std_beta'])}, 95% CI [{_fmt(usefulness_final['std_ci_low'])}, {_fmt(usefulness_final['std_ci_high'])}], "
-            f"p={_fmt(usefulness_final['p_value'])}, n={_fmt(usefulness_final['n'], 0)})."
-        )
+    if midterm_model is not None:
+        if {"estimate", "ci_low", "ci_high", "p_value", "n"} <= set(midterm_model.index):
+            lines.append(
+                "In the adjusted model requested for academic predictors of prompt quality, mean prompt quality was predicted from midterm grade, section, and prior ChatGPT use "
+                f"(midterm coefficient={_fmt(midterm_model['estimate'])}, 95% CI [{_fmt(midterm_model['ci_low'])}, {_fmt(midterm_model['ci_high'])}], "
+                f"p={_fmt(midterm_model['p_value'])}, n={_fmt(midterm_model['n'], 0)})."
+            )
+        else:
+            lines.append(
+                "The adjusted model requested for academic predictors of prompt quality used mean prompt quality as the outcome, with midterm grade, section, and prior ChatGPT use as predictors."
+            )
     if detect_d is not None:
         lines.append(
             "Small-sample sensitivity indicates that the study is powered only for relatively large effects "
@@ -140,13 +145,18 @@ def write_quantitative_report(tables: QuantTableMap, output_dir: Path, generated
         if section == "Learning Outcomes":
             lines += [_md_table(corr), ""]
             learning_models = tables.get("table_learning_outcome_models", pd.DataFrame())
-            lines += ["Adjusted learning-outcome models:", "", _md_table(learning_models), ""]
+            lines += [
+                "Adjusted prompt-quality predictor model; outcome is mean prompt quality and predictors are midterm grade, section/training condition, and prior ChatGPT use:",
+                "",
+                _md_table(learning_models),
+                "",
+            ]
             diagnostics = tables.get("table_complete_case_diagnostics", pd.DataFrame())
-            lines += ["Complete-case diagnostics; loss columns are marginal and non-additive:", "", _md_table(diagnostics), ""]
+            if not diagnostics.empty and "model" in diagnostics.columns:
+                diagnostics = diagnostics[diagnostics["model"] == "prompt_quality_academic_predictors"]
+            lines += ["Complete-case diagnostics for the adjusted prompt-quality predictor model; loss columns are marginal and non-additive:", "", _md_table(diagnostics), ""]
             prior_mapping = tables.get("table_prior_use_mapping", pd.DataFrame())
             lines += ["Prior ChatGPT-use coding:", "", _md_table(prior_mapping), ""]
-            usefulness = tables.get("table_perceived_usefulness_models", pd.DataFrame())
-            lines += ["Targeted perceived-usefulness models:", "", _md_table(usefulness), ""]
         elif section == "Participant-Level Robustness":
             contrasts = tables.get("table_participant_training_contrasts", pd.DataFrame())
             tests = tables.get("table_participant_training_tests", pd.DataFrame())

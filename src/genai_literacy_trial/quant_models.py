@@ -248,36 +248,20 @@ def learning_outcome_models(participant_df: pd.DataFrame) -> LearningOutcomeTabl
         spearman = spearman_with_ci(frame["mean_prompt_score"], frame[outcome], n_boot=1000)
         corrs.append({"metric": f"mean_prompt_score vs {outcome}", "method": "pearson", **pearson})
         corrs.append({"metric": f"mean_prompt_score vs {outcome}", "method": "spearman", **spearman})
-    models = []
-    work = _complete_cases(frame, ["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
-    formula = "final_points ~ mean_prompt_score + midterm_points + group + prior_chatgpt_use_score"
+    work = _complete_cases(frame, ["mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
+    formula = "mean_prompt_score ~ midterm_points + group + prior_chatgpt_use_score"
     result = _fit_ols_hc3(formula, work)
-    tidy = _tidy_result(result, "final_points", int(result.nobs))
-    tidy = _add_standardized_effect(tidy, work, "mean_prompt_score", "final_points", from_standardized_predictor=False, include_ci=False)
-    tidy = _add_standardized_effect(tidy, work, "midterm_points", "final_points", from_standardized_predictor=False, include_ci=False)
+    tidy = _tidy_result(result, "prompt_quality_academic_predictors", int(result.nobs))
+    tidy = _add_standardized_effect(tidy, work, "midterm_points", "mean_prompt_score", from_standardized_predictor=False, include_ci=False)
     tidy = _add_standardized_effect(
         tidy,
         work,
         "prior_chatgpt_use_score",
-        "final_points",
+        "mean_prompt_score",
         from_standardized_predictor=False,
         include_ci=False,
     )
-    models.append(tidy)
-    work["grade_change"] = work["final_points"] - work["midterm_points"]
-    result2 = _fit_ols_hc3("grade_change ~ mean_prompt_score + group + prior_chatgpt_use_score", work)
-    tidy2 = _tidy_result(result2, "grade_change", int(result2.nobs))
-    tidy2 = _add_standardized_effect(tidy2, work, "mean_prompt_score", "grade_change", from_standardized_predictor=False, include_ci=False)
-    tidy2 = _add_standardized_effect(
-        tidy2,
-        work,
-        "prior_chatgpt_use_score",
-        "grade_change",
-        from_standardized_predictor=False,
-        include_ci=False,
-    )
-    models.append(tidy2)
-    return {"correlations": pd.DataFrame(corrs), "models": pd.concat(models, ignore_index=True)}
+    return {"correlations": pd.DataFrame(corrs), "models": tidy}
 
 
 def complete_case_diagnostics(participant_df: pd.DataFrame) -> pd.DataFrame:
@@ -285,8 +269,7 @@ def complete_case_diagnostics(participant_df: pd.DataFrame) -> pd.DataFrame:
     if "prior_chatgpt_use_score" not in frame.columns:
         frame["prior_chatgpt_use_score"] = pd.to_numeric(frame.get("prior_chatgpt_use", np.nan), errors="coerce")
     rows = [
-        _model_diagnostics(frame, "final_points", ["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"]),
-        _model_diagnostics(frame.assign(grade_change=frame["final_points"] - frame["midterm_points"]), "grade_change", ["grade_change", "mean_prompt_score", "group", "prior_chatgpt_use_score"]),
+        _model_diagnostics(frame, "prompt_quality_academic_predictors", ["mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"]),
         _model_diagnostics(frame, "perceived_usefulness_final_points", ["final_points", "midterm_points", "perceived_usefulness", "group", "prior_chatgpt_use_score"], "perceived_usefulness"),
         _model_diagnostics(frame.assign(grade_change=frame["final_points"] - frame["midterm_points"]), "perceived_usefulness_grade_change", ["grade_change", "perceived_usefulness", "group", "prior_chatgpt_use_score"], "perceived_usefulness"),
     ]
@@ -406,13 +389,13 @@ def prompt_missingness_sensitivity(participant_df: pd.DataFrame, min_all4_n: int
     def model_for(subset: pd.DataFrame, label: str, include_scored: bool = False) -> pd.DataFrame:
         work = subset.copy()
         work = _ensure_prior_use_score(work)
-        terms = "mean_prompt_score + midterm_points + group + prior_chatgpt_use_score"
+        terms = "midterm_points + group + prior_chatgpt_use_score"
         if include_scored:
             terms += " + scored_assignments"
-        work = _complete_cases(work, ["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
+        work = _complete_cases(work, ["mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
         if len(work) < 3:
             return pd.DataFrame([{"model": label, "status": "not_run_small_n", "n": int(len(work))}])
-        result = _fit_ols_hc3(f"final_points ~ {terms}", work)
+        result = _fit_ols_hc3(f"mean_prompt_score ~ {terms}", work)
         out = _tidy_result(result, label, int(result.nobs))
         out["status"] = "run"
         return out
@@ -429,22 +412,21 @@ def prompt_missingness_sensitivity(participant_df: pd.DataFrame, min_all4_n: int
 def model_based_learning_prediction_table(participant_df: pd.DataFrame) -> pd.DataFrame:
     frame = _canonical_group(participant_df)
     frame = _ensure_prior_use_score(frame)
-    work = _complete_cases(frame, ["final_points", "mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
-    if work.empty or work["mean_prompt_score"].nunique() < 2:
-        return pd.DataFrame({"mean_prompt_score": [], "predicted_final_points": [], "ci_low": [], "ci_high": []})
-    result = _fit_ols_hc3("final_points ~ mean_prompt_score + midterm_points + group + prior_chatgpt_use_score", work)
-    x = np.linspace(work["mean_prompt_score"].min(), work["mean_prompt_score"].max(), 30)
+    work = _complete_cases(frame, ["mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"])
+    if work.empty or work["midterm_points"].nunique() < 2:
+        return pd.DataFrame({"midterm_points": [], "predicted_mean_prompt_score": [], "ci_low": [], "ci_high": []})
+    result = _fit_ols_hc3("mean_prompt_score ~ midterm_points + group + prior_chatgpt_use_score", work)
+    x = np.linspace(work["midterm_points"].min(), work["midterm_points"].max(), 30)
     reference = {
-        "mean_prompt_score": x,
-        "midterm_points": work["midterm_points"].mean(),
+        "midterm_points": x,
         "group": work["group"].mode().iloc[0],
         "prior_chatgpt_use_score": work["prior_chatgpt_use_score"].mean(),
     }
     pred = result.get_prediction(pd.DataFrame(reference)).summary_frame(alpha=0.05)
     return pd.DataFrame(
         {
-            "mean_prompt_score": x,
-            "predicted_final_points": pred["mean"].to_numpy(),
+            "midterm_points": x,
+            "predicted_mean_prompt_score": pred["mean"].to_numpy(),
             "ci_low": pred["mean_ci_lower"].to_numpy(),
             "ci_high": pred["mean_ci_upper"].to_numpy(),
         }

@@ -93,17 +93,22 @@ def test_learning_outcome_model_schema_and_stable_values() -> None:
         "std_beta",
     }
 
-    final_points = outcome["models"].query("model == 'final_points' and term == 'mean_prompt_score'").iloc[0]
-    grade_change = outcome["models"].query("model == 'grade_change' and term == 'mean_prompt_score'").iloc[0]
+    adjusted = outcome["models"]
+    assert set(adjusted["model"]) == {"prompt_quality_academic_predictors"}
+    assert "final_points" not in set(adjusted["model"])
+    assert "grade_change" not in set(adjusted["model"])
+    assert "final_points" not in set(adjusted["term"])
 
-    assert final_points["n"] == len(participant)
-    assert grade_change["n"] == len(participant)
-    assert math.isclose(float(final_points["estimate"]), 1.052903225806446, rel_tol=1e-12, abs_tol=1e-12)
-    assert math.isclose(float(final_points["std_beta"]), 1.831171367380462, rel_tol=1e-12, abs_tol=1e-12)
-    assert math.isclose(float(grade_change["estimate"]), 0.13887096774193544, rel_tol=1e-12, abs_tol=1e-12)
-    assert math.isclose(float(grade_change["std_beta"]), 0.25149780744258415, rel_tol=1e-12, abs_tol=1e-12)
-    assert not math.isclose(float(final_points["estimate"]), float(final_points["std_beta"]))
-    assert not math.isclose(float(grade_change["estimate"]), float(grade_change["std_beta"]))
+    midterm = adjusted.query("term == 'midterm_points'").iloc[0]
+    prior = adjusted.query("term == 'prior_chatgpt_use_score'").iloc[0]
+
+    assert midterm["n"] == len(participant)
+    assert prior["n"] == len(participant)
+    assert math.isclose(float(midterm["estimate"]), -4.033826577618834e-15, rel_tol=1e-12, abs_tol=1e-12)
+    assert math.isclose(float(midterm["std_beta"]), -2.711489600395708e-15, rel_tol=1e-12, abs_tol=1e-12)
+    assert math.isclose(float(prior["estimate"]), 3.3306690738754696e-16, rel_tol=1e-12, abs_tol=1e-12)
+    assert math.isclose(float(prior["std_beta"]), 1.3985901057127095e-15, rel_tol=1e-12, abs_tol=1e-12)
+    assert not math.isclose(float(midterm["estimate"]), float(midterm["std_beta"]))
 
 
 def test_calibration_and_perceived_usefulness_models_apply_fdr_and_report_n() -> None:
@@ -235,7 +240,7 @@ def test_learning_prediction_table_uses_adjusted_model_ci() -> None:
 
     prediction = model_based_learning_prediction_table(participant)
 
-    assert {"mean_prompt_score", "predicted_final_points", "ci_low", "ci_high"} <= set(prediction.columns)
+    assert {"midterm_points", "predicted_mean_prompt_score", "ci_low", "ci_high"} <= set(prediction.columns)
     assert len(prediction) == 30
     assert (prediction["ci_high"] > prediction["ci_low"]).all()
 
@@ -245,13 +250,13 @@ def test_model_based_learning_prediction_table_schema_and_values() -> None:
 
     prediction = model_based_learning_prediction_table(participant)
 
-    assert set(prediction.columns) == {"mean_prompt_score", "predicted_final_points", "ci_low", "ci_high"}
+    assert set(prediction.columns) == {"midterm_points", "predicted_mean_prompt_score", "ci_low", "ci_high"}
     assert len(prediction) == 30
-    assert math.isclose(float(prediction["mean_prompt_score"].min()), 2.5, rel_tol=0, abs_tol=1e-12)
-    assert math.isclose(float(prediction["mean_prompt_score"].max()), 3.6666666666666665, rel_tol=0, abs_tol=1e-12)
-    assert math.isclose(float(prediction["predicted_final_points"].iloc[0]), 3.3, rel_tol=0, abs_tol=1e-12)
-    assert math.isclose(float(prediction["predicted_final_points"].iloc[-1]), 4.52838709677418, rel_tol=0, abs_tol=1e-12)
-    assert float(prediction["ci_low"].iloc[0]) < float(prediction["predicted_final_points"].iloc[0]) < float(prediction["ci_high"].iloc[0])
+    assert math.isclose(float(prediction["midterm_points"].min()), 3.0, rel_tol=0, abs_tol=1e-12)
+    assert math.isclose(float(prediction["midterm_points"].max()), 3.7, rel_tol=0, abs_tol=1e-12)
+    assert math.isclose(float(prediction["predicted_mean_prompt_score"].iloc[0]), 2.5, rel_tol=0, abs_tol=1e-12)
+    assert math.isclose(float(prediction["predicted_mean_prompt_score"].iloc[-1]), 2.5, rel_tol=0, abs_tol=1e-12)
+    assert float(prediction["ci_low"].iloc[0]) < float(prediction["predicted_mean_prompt_score"].iloc[0]) < float(prediction["ci_high"].iloc[0])
 
 
 def test_complete_case_diagnostics_report_marginal_loss() -> None:
