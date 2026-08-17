@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from genai_literacy_trial.scales import GRADE_POINTS, LIKERT_POINTS
 
@@ -107,4 +107,4 @@ def _validate_quant_config(config: QuantConfig) -> QuantConfig:
 def load_expected_inventory(path: Path | None) -> ExpectedInventory:
     if path is None or not path.exists():
         return {}
-    return tomllib.loads(path.read_text(encoding="utf-8"))
+    return cast(ExpectedInventory, tomllib.loads(path.read_text(encoding="utf-8")))

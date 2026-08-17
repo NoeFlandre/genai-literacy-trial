@@ -93,6 +93,7 @@ The full study workflow requires private participant-level survey, grade, and pr
 uv lock --check
 uv sync --locked --dev
 uv run ruff check .
+uv run ty check .
 uv run pytest
 uv run python scripts/reproduce_small.py
 uv run python scripts/validate_artifacts.py --mode small --public-output-dir repro_outputs/small/public
@@ -101,7 +102,7 @@ uv run python scripts/check_repo_hygiene.py
 uv run genai-literacy-trial audit-privacy
 ```
 
-CI runs the same commands on Python 3.12. No type-check command is configured.
+CI runs the same commands on Python 3.12, including the `ty` type check.
 
 ## Documentation
 

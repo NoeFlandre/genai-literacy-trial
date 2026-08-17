@@ -68,6 +68,7 @@ Run Ruff lint:
 
 ```bash
 uv run ruff check .
+uv run ty check .
 ```
 
 Run tests:
@@ -104,7 +105,7 @@ uv run genai-literacy-trial audit-privacy --root repro_outputs/small/public
 
 The `scripts/` commands are wrappers around package modules. When changing smoke or hygiene behavior, edit `src/genai_literacy_trial/` and keep `python -m genai_literacy_trial.reproduce_small`, `python -m genai_literacy_trial.validate_artifacts`, and `python -m genai_literacy_trial.repo_hygiene` working.
 
-Ruff lint is configured. No type-check command is configured; do not invent one as a required check without adding the tool and config intentionally.
+Ruff lint and `ty` type checking are configured. Keep both checks passing when changing typed interfaces or pandas transformations.
 
 ## Working With Artifacts
 

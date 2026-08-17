@@ -20,7 +20,7 @@ Use this as a navigation aid before editing.
 : Container setup for running `uv run pytest`. Inspected but not part of CI.
 
 `.github/workflows/ci.yml`
-: CI installs uv/Python 3.12, checks the lockfile, syncs locked dependencies, runs Ruff, pytest, smoke/artifact validation, repository hygiene, and privacy audits.
+: CI installs uv/Python 3.12, checks the lockfile, syncs locked dependencies, runs Ruff, `ty`, pytest, smoke/artifact validation, repository hygiene, and privacy audits.
 
 ## Source Package
 

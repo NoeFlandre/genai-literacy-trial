@@ -143,7 +143,7 @@ flowchart LR
     Inspect --> Scope["choose smallest safe change"]
     Scope --> Edit["edit src tests docs as needed"]
     Edit --> TargetedChecks["run targeted tests"]
-    TargetedChecks --> FullChecks["run ruff pytest smoke privacy checks when relevant"]
+    TargetedChecks --> FullChecks["run ruff ty pytest smoke privacy checks when relevant"]
     FullChecks --> Status["inspect git status and diff"]
     Status --> Report["report verified commands and uncertainty"]
 

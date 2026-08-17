@@ -16,6 +16,7 @@ jobs:
       - run: uv lock --check
       - run: uv sync --locked --dev
       - run: uv run ruff check .
+      - run: uv run ty check .
       - run: uv run pytest
       - run: uv run python scripts/reproduce_small.py
       - run: uv run python scripts/validate_artifacts.py --mode small --public-output-dir repro_outputs/small/public

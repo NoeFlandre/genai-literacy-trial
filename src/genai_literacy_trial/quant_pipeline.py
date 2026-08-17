@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
 import numpy as np
 import pandas as pd
@@ -156,7 +156,8 @@ def _baseline(participant: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
         rows.extend(summary.to_dict("records"))
     for cat in ["gender", "major", "prior_chatgpt_use"]:
         if cat in participant.columns:
-            counts = participant.groupby(["group", cat], dropna=False).size().reset_index(name="n")
+            grouped_counts = cast(pd.Series, participant.groupby(["group", cat], dropna=False).size())
+            counts = grouped_counts.reset_index(name="n")
             counts.insert(0, "metric", cat)
             counts = suppress_small_cells(counts, category_col=cat, min_count=config.min_public_cell_count)
             rows.extend(counts.to_dict("records"))

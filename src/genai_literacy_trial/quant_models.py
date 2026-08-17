@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -174,14 +175,15 @@ def fit_prompt_trajectory_model(assignment_df: pd.DataFrame) -> ModelSummary:
 
 def estimate_prompt_trajectory_means(assignment_df: pd.DataFrame, model_result: ModelSummary | None = None) -> pd.DataFrame:
     rows = []
-    for (group, assignment), part in assignment_df.groupby(["group", "assignment"], sort=True):
+    for key, part in assignment_df.groupby(["group", "assignment"], sort=True):
+        group, assignment = cast(tuple[object, object], key)
         stat = mean_ci_bootstrap(part["prompt_score"].dropna(), n_boot=1000)
-        rows.append({"group": group, "assignment": int(assignment), **stat})
+        rows.append({"group": group, "assignment": int(cast(int, assignment)), **stat})
     return pd.DataFrame(rows).sort_values(["group", "assignment"])
 
 
 def _contrast_rows(df: pd.DataFrame, value: str) -> list[TrainingContrastRow]:
-    rows = []
+    rows: list[TrainingContrastRow] = []
     pairs = [("C", "A"), ("C", "B"), ("B", "A")]
     pooled = df.assign(group_pooled=np.where(df["group"] == "C", "C", "pooled_A_B"))
     def contrast_p_value(a: pd.Series, b: pd.Series) -> float:
@@ -204,12 +206,12 @@ def _contrast_rows(df: pd.DataFrame, value: str) -> list[TrainingContrastRow]:
         effect = hedges_g(a, b, n_boot=1000)
         diff_stat = _mean_difference_ci(a, b)
         p_value = contrast_p_value(a, b)
-        rows.append({"contrast": f"{left} vs {right}", **diff_stat, "hedges_g": effect["estimate"], "hedges_g_ci_low": effect["ci_low"], "hedges_g_ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))})
+        rows.append(cast(TrainingContrastRow, {"contrast": f"{left} vs {right}", **diff_stat, "hedges_g": effect["estimate"], "hedges_g_ci_low": effect["ci_low"], "hedges_g_ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))}))
     a = pooled.loc[pooled["group_pooled"] == "C", value].dropna()
     b = pooled.loc[pooled["group_pooled"] == "pooled_A_B", value].dropna()
     effect = hedges_g(a, b, n_boot=1000)
     p_value = contrast_p_value(a, b)
-    rows.append({"contrast": "C vs pooled A+B", **_mean_difference_ci(a, b), "hedges_g": effect["estimate"], "hedges_g_ci_low": effect["ci_low"], "hedges_g_ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))})
+    rows.append(cast(TrainingContrastRow, {"contrast": "C vs pooled A+B", **_mean_difference_ci(a, b), "hedges_g": effect["estimate"], "hedges_g_ci_low": effect["ci_low"], "hedges_g_ci_high": effect["ci_high"], "p_value": p_value, "n": int(len(a) + len(b))}))
     return rows
 
 
@@ -384,7 +386,8 @@ def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
 def prompt_missingness_sensitivity(participant_df: pd.DataFrame, min_all4_n: int = 30) -> PromptSensitivityTables:
     frame = _canonical_group(participant_df)
     frame = _ensure_prior_use_score(frame)
-    distribution = frame.groupby(["group", "scored_assignments"], dropna=False).size().reset_index(name="n").sort_values(["group", "scored_assignments"])
+    grouped_distribution = cast(pd.Series, frame.groupby(["group", "scored_assignments"], dropna=False).size())
+    distribution = grouped_distribution.reset_index(name="n").sort_values(["group", "scored_assignments"])
 
     def model_for(subset: pd.DataFrame, label: str, include_scored: bool = False) -> pd.DataFrame:
         work = subset.copy()

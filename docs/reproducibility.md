@@ -17,7 +17,7 @@ cd genai-literacy-trial
 uv sync --dev
 ```
 
-The project requires Python 3.11 or newer. The CI workflow currently installs Python 3.12 and runs lockfile, Ruff, pytest, smoke, artifact validation, repository hygiene, and privacy checks.
+The project requires Python 3.11 or newer. The CI workflow currently installs Python 3.12 and runs lockfile, Ruff, `ty`, pytest, smoke, artifact validation, repository hygiene, and privacy checks.
 
 ## Required Data Inputs
 

@@ -35,9 +35,13 @@ def group_summary_ci(df: pd.DataFrame, group_col: str, value_col: str) -> pd.Dat
     rows = []
     for group, part in df.groupby(group_col, sort=True):
         stat = mean_ci_bootstrap(part[value_col])
-        stat["group"] = group
-        stat["sd"] = float(part[value_col].dropna().std(ddof=1)) if part[value_col].dropna().shape[0] > 1 else math.nan
-        rows.append(stat)
+        rows.append(
+            {
+                **stat,
+                "group": group,
+                "sd": float(part[value_col].dropna().std(ddof=1)) if part[value_col].dropna().shape[0] > 1 else math.nan,
+            }
+        )
     return pd.DataFrame(rows)[["group", "n", "mean", "sd", "ci_low", "ci_high"]]
 
 

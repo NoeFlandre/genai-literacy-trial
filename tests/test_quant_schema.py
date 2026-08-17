@@ -73,9 +73,9 @@ def test_quant_table_map_type_alias_is_importable() -> None:
 
 
 def test_quant_path_map_type_alias_is_importable() -> None:
-    paths: QuantPathMap = {}
+    paths: QuantPathMap = {PUBLIC_OUTPUT_DIR_KEY: Path(), PRIVATE_OUTPUT_DIR_KEY: Path()}
 
-    assert paths == {}
+    assert set(paths) == {PUBLIC_OUTPUT_DIR_KEY, PRIVATE_OUTPUT_DIR_KEY}
 
 
 def test_quant_path_map_declares_required_output_paths() -> None:
