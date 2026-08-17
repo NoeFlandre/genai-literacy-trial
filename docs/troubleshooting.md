@@ -27,6 +27,8 @@ The quantitative path fails before modeling for nonnumeric/nonfinite assignment 
 
 When `--expected-inventory` is supplied, observed counts must match the TOML contract. Confirm the retention criteria and source extraction before changing the expected file. Private expected inventories must remain ignored.
 
+If the command reports `Expected inventory file not found`, check the path passed to `--expected-inventory`. Omit the option only when inventory validation is intentionally not required.
+
 ## Stale artifacts
 
 Run:

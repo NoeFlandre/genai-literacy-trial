@@ -34,6 +34,13 @@ def test_expected_inventory_type_contract_is_explicit() -> None:
     assert expected == {}
 
 
+def test_missing_explicit_expected_inventory_path_fails_fast(tmp_path: Path) -> None:
+    missing = tmp_path / "missing_expected_inventory.toml"
+
+    with pytest.raises(FileNotFoundError, match="Expected inventory file not found"):
+        load_expected_inventory(missing)
+
+
 def test_expected_inventory_declares_known_inventory_keys() -> None:
     assert get_type_hints(ExpectedInventory) == {
         "pre_responses": int,

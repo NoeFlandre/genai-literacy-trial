@@ -24,7 +24,7 @@ The loader rejects identical pre/post labels, duplicate groups or assignments, e
 --expected-inventory config/expected_inventory.template.toml
 ```
 
-The file is optional for `analyze-quant` but is part of the public smoke path.
+The file is optional only when `--expected-inventory` is omitted from `analyze-quant`. If the option is supplied, the path must exist and contain valid TOML; observed counts must match the contract. A missing explicit path fails before modeling instead of silently disabling inventory validation. The file is always part of the public smoke path.
 
 ## Input names and columns
 

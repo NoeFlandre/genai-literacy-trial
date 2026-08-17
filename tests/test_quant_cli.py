@@ -123,3 +123,31 @@ def test_analyze_quant_cli_fails_on_expected_inventory_mismatch(tmp_path: Path) 
     assert result.exit_code != 0
     assert result.exception is not None
     assert "Inventory mismatch for pre_responses" in str(result.exception)
+
+
+def test_analyze_quant_cli_fails_on_missing_expected_inventory(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "private"
+    public_dir = tmp_path / "public"
+    write_synthetic_quant_input(input_dir)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "analyze-quant",
+            "--input-dir",
+            str(input_dir),
+            "--config",
+            "config/quant_config.template.toml",
+            "--expected-inventory",
+            str(tmp_path / "missing_expected_inventory.toml"),
+            "--output-dir",
+            str(output_dir),
+            "--public-output-dir",
+            str(public_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert result.exception is not None
+    assert "Expected inventory file not found" in str(result.exception)

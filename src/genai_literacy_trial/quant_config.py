@@ -105,6 +105,8 @@ def _validate_quant_config(config: QuantConfig) -> QuantConfig:
 
 
 def load_expected_inventory(path: Path | None) -> ExpectedInventory:
-    if path is None or not path.exists():
+    if path is None:
         return {}
+    if not path.exists():
+        raise FileNotFoundError(f"Expected inventory file not found: {path}")
     return cast(ExpectedInventory, tomllib.loads(path.read_text(encoding="utf-8")))
