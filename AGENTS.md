@@ -20,6 +20,7 @@ uv lock --check
 uv sync --locked --dev
 uv run ruff check .
 uv run ty check .
+uv run mkdocs build --strict --site-dir /tmp/genai-literacy-trial-site
 uv run pytest
 uv run python scripts/check_repo_hygiene.py
 uv run genai-literacy-trial audit-privacy
@@ -35,7 +36,7 @@ uv run genai-literacy-trial audit-privacy --root repro_outputs/small/public
 
 The files under `scripts/` are compatibility wrappers around package modules. Prefer keeping reusable logic in `src/genai_literacy_trial/`; module forms such as `uv run python -m genai_literacy_trial.reproduce_small` should stay equivalent to the script wrappers.
 
-Ruff lint and `ty` type checking are configured in `pyproject.toml` and CI.
+Ruff lint, `ty` type checking, and the strict MkDocs build are configured in `pyproject.toml` and CI.
 
 ## Edit Carefully
 

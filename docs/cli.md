@@ -1,113 +1,18 @@
-# CLI And Scripts
+# CLI Reference
 
-The installed command is:
-
-```bash
-uv run genai-literacy-trial
-```
-
-It is a Typer app defined in `src/genai_literacy_trial/cli.py`.
-
-Additional console entry points expose the public smoke and hygiene helpers:
+Install the project first:
 
 ```bash
-uv run genai-literacy-reproduce-small
-uv run genai-literacy-validate-artifacts
-uv run genai-literacy-check-repo-hygiene
+uv sync --locked --dev
 ```
 
-The `scripts/` files documented below are compatibility wrappers around package modules in `src/genai_literacy_trial/`.
-
-## Public Smoke Scripts
-
-### `scripts/reproduce_small.py`
-
-Verified smoke command:
+Use `--help` for the complete Typer-generated option list:
 
 ```bash
-uv run python scripts/reproduce_small.py
+uv run genai-literacy-trial --help
 ```
 
-Equivalent module and console forms:
-
-```bash
-uv run python -m genai_literacy_trial.reproduce_small
-uv run genai-literacy-reproduce-small
-```
-
-Defaults:
-
-```text
---input-dir data/synthetic
---config config/quant_config.template.toml
---expected-inventory config/expected_inventory.template.toml
---output-dir repro_outputs/small/private
---public-output-dir repro_outputs/small/public
-```
-
-Useful options:
-
-```bash
-uv run python scripts/reproduce_small.py \
-  --public-output-dir /tmp/genai-literacy-public \
-  --output-dir /tmp/genai-literacy-private
-```
-
-Use `--show-model-warnings` to show statsmodels/numpy warnings from the tiny synthetic dataset. The default wrapper hides those warnings so smoke output is readable.
-
-### `scripts/validate_artifacts.py`
-
-Verified validator command:
-
-```bash
-uv run python scripts/validate_artifacts.py --mode small --public-output-dir repro_outputs/small/public
-```
-
-Equivalent module and console forms:
-
-```bash
-uv run python -m genai_literacy_trial.validate_artifacts --mode small --public-output-dir repro_outputs/small/public
-uv run genai-literacy-validate-artifacts --mode small --public-output-dir repro_outputs/small/public
-```
-
-Defaults:
-
-```text
---mode small
---input-dir data/synthetic
---config config/quant_config.template.toml
---expected-inventory config/expected_inventory.template.toml
---public-output-dir repro_outputs/small/public
-```
-
-The validator checks source files, required output files, non-empty files, CSV readability, and mtime-based staleness. Use `--allow-stale` only for intentional inspection of archived outputs.
-
-### `scripts/check_repo_hygiene.py`
-
-Tracked-file size check:
-
-```bash
-uv run python scripts/check_repo_hygiene.py
-```
-
-Equivalent module and console forms:
-
-```bash
-uv run python -m genai_literacy_trial.repo_hygiene
-uv run genai-literacy-check-repo-hygiene
-```
-
-Default threshold:
-
-```text
---max-mib 5.0
-```
-
-The script uses `git ls-files`, so it checks committed/tracked files rather than ignored local outputs.
-
-## `genai-literacy-trial analyze-quant`
-
-Main quantitative pipeline:
+## Primary quantitative command
 
 ```bash
 uv run genai-literacy-trial analyze-quant \
@@ -118,79 +23,51 @@ uv run genai-literacy-trial analyze-quant \
   --public-output-dir repro_outputs/small/public
 ```
 
-Defaults from the CLI:
+Defaults are `data/synthetic`, the public template config, no expected-inventory file, `private_outputs/quantitative`, and `paper_outputs/quantitative`, respectively. The command accepts CSV, XLSX, and compatibility-prefixed CSV input names; see [Configuration](configuration.md).
 
-```text
---input-dir data/synthetic
---config config/quant_config.template.toml
---expected-inventory None
---output-dir private_outputs/quantitative
---public-output-dir paper_outputs/quantitative
-```
+It writes aggregate tables, figures, and `quantitative_report.md`, then scans the selected public output directory. The `--output-dir` is a local diagnostics path and must not be a tracked public directory.
 
-The command prints the public output directory and runs a privacy audit on generated public outputs before returning.
-
-## `genai-literacy-trial reproduce-paper`
-
-Legacy aggregate-paper pipeline:
+## Public smoke wrapper
 
 ```bash
-uv run genai-literacy-trial reproduce-paper
+uv run python scripts/reproduce_small.py
 ```
 
-Defaults:
-
-```text
---input-dir data/synthetic
---output-dir paper_outputs
-```
-
-This combines `build-aggregates` and `validate-paper`: it writes aggregate CSVs and `validation_report.csv`.
-
-## `genai-literacy-trial build-aggregates`
-
-Legacy aggregate table generation:
+Equivalent forms:
 
 ```bash
-uv run genai-literacy-trial build-aggregates --input-dir data/synthetic --output-dir paper_outputs
+uv run python -m genai_literacy_trial.reproduce_small
+uv run genai-literacy-reproduce-small
 ```
 
-Reads `survey.csv`, `grades.csv`, and `prompts.csv`. Writes aggregate CSV tables.
+Useful options are `--input-dir`, `--config`, `--expected-inventory`, `--output-dir`, `--public-output-dir`, `--allow-stale`, and `--show-model-warnings`.
 
-## `genai-literacy-trial validate-paper`
-
-Legacy target validation:
+## Artifact validator
 
 ```bash
-uv run genai-literacy-trial validate-paper --output-dir paper_outputs
+uv run python scripts/validate_artifacts.py \
+  --mode small \
+  --public-output-dir repro_outputs/small/public
 ```
 
-Reads `paper_statistics.csv` when present, otherwise falls back to `sample_summary.csv`, and writes `validation_report.csv`.
+Equivalent forms are `python -m genai_literacy_trial.validate_artifacts` and `genai-literacy-validate-artifacts`. The validator supports `--input-dir`, `--config`, `--expected-inventory`, `--public-output-dir`, and `--allow-stale`.
 
-## `genai-literacy-trial audit-privacy`
-
-Privacy scanner:
+## Privacy and hygiene
 
 ```bash
 uv run genai-literacy-trial audit-privacy
 uv run genai-literacy-trial audit-privacy --root repro_outputs/small/public
+uv run python scripts/check_repo_hygiene.py
 ```
 
-Options:
+`audit-privacy` accepts `--root` and optional `--local-patterns`. The hygiene wrapper checks tracked file sizes; its default threshold is 5 MiB.
 
-```text
---root .
---local-patterns None
-```
-
-When `--local-patterns` is omitted, the scanner looks for `privacy_patterns.local.yml` under the selected root. That file is ignored by git.
-
-## Docker
-
-The `Dockerfile` installs `uv`, copies `pyproject.toml`, `uv.lock`, `README.md`, `src/`, `tests/`, and `data/`, runs `uv sync --dev`, and defaults to:
+## Legacy aggregate commands
 
 ```bash
-uv run pytest
+uv run genai-literacy-trial build-aggregates
+uv run genai-literacy-trial validate-paper
+uv run genai-literacy-trial reproduce-paper
 ```
 
-The Docker workflow was inspected in this docs update but not run locally.
+These commands default to `data/synthetic` and `paper_outputs`. They use the older aggregate implementation in `analysis.py` and should not be confused with the newer quantitative artifact contract.

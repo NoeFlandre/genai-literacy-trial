@@ -11,7 +11,10 @@ Use this as a navigation aid before editing.
 : Concise agent instructions and invariants.
 
 `pyproject.toml`
-: Python package metadata, dependencies, `genai-literacy-trial` entry point, pytest config. Package manager is `uv`.
+: Python package metadata, dependencies, `genai-literacy-trial` entry point, pytest config, and the MkDocs Material development dependency. Package manager is `uv`.
+
+`mkdocs.yml`
+: MkDocs Material site metadata, strict public navigation, Mermaid support, and excluded internal agent pages.
 
 `uv.lock`
 : Locked dependency graph.
@@ -20,7 +23,7 @@ Use this as a navigation aid before editing.
 : Container setup for running `uv run pytest`. Inspected but not part of CI.
 
 `.github/workflows/ci.yml`
-: CI installs uv/Python 3.12, checks the lockfile, syncs locked dependencies, runs Ruff, `ty`, pytest, smoke/artifact validation, repository hygiene, and privacy audits.
+: CI installs uv/Python 3.12, checks the lockfile, syncs locked dependencies, runs Ruff, `ty`, the strict MkDocs build, pytest, smoke/artifact validation, repository hygiene, and privacy audits.
 
 ## Source Package
 
@@ -137,14 +140,23 @@ Other test files cover legacy aggregate analysis, schema constants, report gener
 
 ## Docs
 
+`docs/index.md`
+: Public documentation landing page and scope boundary.
+
+`docs/development.md`
+: Local quality gates, tests, safe-change rules, and documentation build.
+
+`docs/privacy.md`
+: Public-data boundary, privacy scans, and aggregate suppression policy.
+
 `docs/architecture.md`
-: Module responsibilities and extension rules.
+: Module responsibilities and public contract boundaries.
 
 `docs/data_flow.md`
 : Quantitative and legacy pipeline flow.
 
 `docs/diagrams.md`
-: Concise Mermaid diagrams for architecture, data flow, artifacts, CLI/module mapping, and agent workflow.
+: Concise Mermaid diagrams for workflow checks, CLI mapping, and artifact lifecycle.
 
 `docs/cli.md`
 : Commands and scripts.
@@ -163,3 +175,6 @@ Other test files cover legacy aggregate analysis, schema constants, report gener
 
 `docs/common_failure_modes.md`
 : Agent-focused failure-mode checklist.
+
+`docs/agent_playbook.md`
+: Internal agent workflow and safe-change guidance; excluded from the public MkDocs site.

@@ -1,45 +1,34 @@
-# Configuration Reference
+# Configuration
 
-The public quantitative workflow is configured by TOML files in `config/`.
+## Public quantitative template
 
-## Public Template Config
+`config/quant_config.template.toml` is the public starting point for `analyze-quant`. Its sections are:
 
-`config/quant_config.template.toml` defines:
+| Section | Purpose |
+| --- | --- |
+| `[columns]` | Source column names for IDs, phases, groups, assignments, scores, grades, prior use, gender, and major. |
+| `[labels]` | Pre/post labels, configured groups, and assignment numbers. |
+| `[privacy]` | Public small-cell threshold. The template uses `min_public_cell_count = 5`. |
+| `[survey_dimensions]` | Survey composite names and item columns. |
+| `[reverse_coded_items]` | Items reversed before composite/reliability calculations. |
+| `[likert_mapping]` | Text responses mapped to numeric values. |
+| `[grade_mapping]` | Letter grades mapped to grade points. |
 
-- `[columns]`: source column names for participant IDs, phase labels, group labels, assignments, prompt scores, grades, prior use, gender, and major.
-- `[labels]`: pre/post phase labels, expected groups, and expected assignment numbers.
-- `[privacy]`: public-output suppression settings such as `min_public_cell_count`.
-- `[survey_dimensions]`: survey composite definitions.
-- `[reverse_coded_items]`: reverse-scored survey items by dimension.
-- `[likert_mapping]`: conversion from survey response text to numeric values.
-- `[grade_mapping]`: conversion from letter grades to grade points.
+The loader rejects identical pre/post labels, duplicate groups or assignments, empty groups or assignments, and a suppression threshold below 1.
 
-Use the template as the starting point for public synthetic runs:
+## Expected inventory
 
-```bash
-uv run genai-literacy-trial analyze-quant \
-  --input-dir data/synthetic \
-  --config config/quant_config.template.toml \
-  --expected-inventory config/expected_inventory.template.toml \
-  --output-dir repro_outputs/small/private \
-  --public-output-dir repro_outputs/small/public
-```
-
-## Expected Inventory
-
-`config/expected_inventory.template.toml` documents the expected synthetic fixture counts, including pre/post responses, retained participants, survey rows, prompt assignment rows, scored prompt observations, missing prompt scores, and group counts.
-
-Pass an expected-inventory file when you want the pipeline to fail on unexpected row-count drift:
+`config/expected_inventory.template.toml` contains synthetic counts for pre/post responses, retained participants and survey rows, prompt rows, scored observations, missing scores, and group counts. Pass it to fail fast when a fixture changes unexpectedly:
 
 ```bash
 --expected-inventory config/expected_inventory.template.toml
 ```
 
-For private full-study runs, use an ignored private inventory file after confirming the data extraction criteria.
+The file is optional for `analyze-quant` but is part of the public smoke path.
 
-## Input File Names
+## Input names and columns
 
-The quantitative pipeline expects these dataset names in the input directory:
+The quantitative loader searches the input directory for:
 
 ```text
 survey.csv or survey.xlsx
@@ -47,57 +36,26 @@ grades.csv or grades.xlsx
 prompts.csv or prompts.xlsx
 ```
 
-For compatibility with the private cleaning workflow, it also accepts:
+It also accepts `public_cli_input_survey.csv`, `public_cli_input_grades.csv`, and `public_cli_input_prompts.csv` for compatibility with the private cleaning workflow. Required columns are determined by `[columns]`; the public template requires an ID and phase in survey data, an ID/group/midterm/final grade in grade data, and an ID/assignment/prompt score in prompt data.
 
-```text
-public_cli_input_survey.csv
-public_cli_input_grades.csv
-public_cli_input_prompts.csv
-```
+The legacy aggregate path is less configurable and expects CSV files named `survey.csv`, `grades.csv`, and `prompts.csv` with its older column names.
 
-The older aggregate-only `reproduce-paper` command expects only:
+## Environment variables
 
-```text
-survey.csv
-grades.csv
-prompts.csv
-```
+No environment variable is required by the public workflow. The figure module selects matplotlib's `Agg` backend in code. The Dockerfile sets `UV_SYSTEM_PYTHON=1` inside the container. `UV_CACHE_DIR` may be set to a writable local cache directory when the default uv cache is unavailable; this is an environment workaround, not a project input.
 
-## Environment Variables
+## Private configuration
 
-No environment variables are required for the public smoke path.
-
-The figure code sets matplotlib to the non-interactive `Agg` backend in code, so `MPLBACKEND` is not required for headless runs. Use standard Python or `uv` environment variables only if needed for your local development environment.
-
-The `Dockerfile` sets `UV_SYSTEM_PYTHON=1` inside the container before running `uv sync --dev`.
-
-## Private Configuration
-
-The following private config paths are ignored by git:
+These paths are ignored and must remain local:
 
 ```text
 config/private_quant_config.toml
 config/private_expected_inventory.toml
+privacy_patterns.local.yml
 ```
 
-Use private config files for real study column mappings or inventory targets that cannot be published. Keep them out of public commits.
+Use private configs only for local author-side data mappings and inventory expectations. Do not copy their contents into tracked docs, tests, or public artifacts.
 
-## Privacy Settings
+## Output paths
 
-`min_public_cell_count` controls small-cell suppression in public aggregate tables. The public template sets it to `5`.
-
-The privacy audit can also read ignored local patterns from `privacy_patterns.local.yml`:
-
-```bash
-uv run genai-literacy-trial audit-privacy \
-  --root paper_outputs \
-  --local-patterns privacy_patterns.local.yml
-```
-
-Only use local patterns to add stricter checks. Do not use them to bypass public privacy findings.
-
-## Cache And Output Configuration
-
-`analyze-quant` writes public outputs to `--public-output-dir` and creates the directory passed to `--output-dir`. The public output directory is cleaned before each run only for top-level generated-style suffixes: `.csv`, `.pdf`, `.png`, and `.md`.
-
-`scripts/reproduce_small.py` defaults to ignored `repro_outputs/small/` paths so local smoke runs do not modify checked-in `paper_outputs/`.
+The public smoke wrapper defaults to ignored `repro_outputs/small/public` and `repro_outputs/small/private`. The direct `analyze-quant` command defaults to `paper_outputs/quantitative` for public artifacts and `private_outputs/quantitative` for local diagnostics; use explicit ignored paths for experiments unless checked-in artifact regeneration is intended.

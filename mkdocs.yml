@@ -1,0 +1,66 @@
+site_name: GenAI Literacy Trial
+site_description: Public, privacy-preserving reproducibility package for a three-arm prompt-engineering training trial.
+site_url: https://noeflandre.github.io/genai-literacy-trial/
+repo_name: NoeFlandre/genai-literacy-trial
+repo_url: https://github.com/NoeFlandre/genai-literacy-trial
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.footer
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - javascripts/mermaid.js
+
+exclude_docs: |
+  agent_playbook.md
+  repo_map.md
+  common_failure_modes.md
+
+nav:
+  - Home: index.md
+  - Reproducibility: reproducibility.md
+  - Architecture: architecture.md
+  - Data flow: data_flow.md
+  - Diagrams: diagrams.md
+  - CLI reference: cli.md
+  - Configuration: configuration.md
+  - Artifacts: artifacts.md
+  - Privacy and scope: privacy.md
+  - Development: development.md
+  - Troubleshooting: troubleshooting.md

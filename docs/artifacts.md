@@ -1,39 +1,12 @@
 # Artifacts
 
-This repository separates public aggregate artifacts from private/local research materials.
+## Public smoke outputs
 
-## Public Inputs
+The quantitative public output directory contains the following contract.
 
-Tracked public inputs for the small workflow:
-
-```text
-data/synthetic/survey.csv
-data/synthetic/grades.csv
-data/synthetic/prompts.csv
-config/quant_config.template.toml
-config/expected_inventory.template.toml
-```
-
-The synthetic data are tiny fixtures for exercising the workflow. They are not de-identified participant records and are not expected to reproduce manuscript statistics.
-
-## Main Quantitative Outputs
-
-`run_quant_analysis()` writes the public quantitative artifact set to the selected public output directory. For `scripts/reproduce_small.py`, that directory defaults to:
+### Tables
 
 ```text
-repro_outputs/small/public/
-```
-
-For `genai-literacy-trial analyze-quant`, the CLI default is:
-
-```text
-paper_outputs/quantitative/
-```
-
-Required public quantitative artifacts are:
-
-```text
-quantitative_report.md
 table_data_verification.csv
 table_missingness_prompt_by_group_assignment.csv
 table_baseline_balance.csv
@@ -53,19 +26,23 @@ table_prior_use_mapping.csv
 table_scored_assignment_distribution_by_group.csv
 table_prompt_sensitivity_min3_assignments.csv
 table_prompt_sensitivity_all4_assignments.csv
-fig_prompt_quality_trajectory.pdf
-fig_prompt_quality_trajectory.png
-fig_prompt_quality_learning_outcome.pdf
-fig_prompt_quality_learning_outcome.png
-fig_calibration_forest.pdf
-fig_calibration_forest.png
 ```
 
-The authoritative table names live in `src/genai_literacy_trial/quant_schema.py`. Figure stems and formats live in `src/genai_literacy_trial/quant_figures.py`. The report filename lives in `src/genai_literacy_trial/quant_report.py`.
+### Figures and report
 
-## Legacy Aggregate Outputs
+Each figure stem is written as both `.png` and `.pdf`:
 
-The legacy aggregate-paper workflow writes top-level CSVs under `paper_outputs/` by default:
+```text
+fig_prompt_quality_trajectory
+fig_prompt_quality_learning_outcome
+fig_calibration_forest
+```
+
+The generated report is `quantitative_report.md`. The names come from `quant_schema.py`, `quant_figures.py`, and `quant_report.py` and are tested as public contracts.
+
+## Legacy aggregate outputs
+
+The older `analysis.py` path writes these top-level CSVs:
 
 ```text
 sample_summary.csv
@@ -75,53 +52,26 @@ paper_statistics.csv
 validation_report.csv
 ```
 
-`validation_report.csv` compares observed aggregate metrics with `PAPER_TARGETS` in `analysis.py`.
+The repository includes aggregate-only examples under `paper_outputs/` and `paper_outputs/quantitative/`. Treat them as checked-in manuscript-facing artifacts; do not overwrite them casually.
 
-## Checked-In Public Outputs
-
-Checked-in public artifacts currently include:
+## Local and private paths
 
 ```text
-paper_outputs/
-paper_outputs/quantitative/
-docs/figures/study_overview.png
-docs/figures/study_overview.pdf
-docs/figures/study_overview.tex
+repro_outputs/                 ignored generated smoke outputs
+private_outputs/               ignored local diagnostics
+data/private/                  ignored participant-level inputs
+archive/                       ignored source/archive materials
+clean_private_data/            ignored cleaning workspace
 ```
 
-These must remain aggregate-only or static documentation assets.
+The current quantitative pipeline creates the requested `--output-dir` for local diagnostics but writes the documented public tables, figures, and report to `--public-output-dir`. Do not infer that a private output directory is a complete reproducible snapshot.
 
-## Ignored Or Private Artifacts
-
-The following paths are intentionally local-only or ignored:
-
-```text
-archive/
-clean_private_data/
-clean_private_data/analysis_ready/
-data/private/
-private_outputs/
-repro_outputs/
-config/private_quant_config.toml
-config/private_expected_inventory.toml
-privacy_patterns.local.yml
-```
-
-Do not move private inputs, raw exports, notebooks, spreadsheets, rosters, or participant-level diagnostics into tracked paths.
-
-## Artifact Validation
-
-Run:
+## Validation and freshness
 
 ```bash
-uv run python scripts/validate_artifacts.py --mode small --public-output-dir repro_outputs/small/public
+uv run python scripts/validate_artifacts.py \
+  --mode small \
+  --public-output-dir repro_outputs/small/public
 ```
 
-The validator reports:
-
-- `missing_source` or `empty_source` for unavailable inputs/configuration.
-- `missing`, `not_file`, or `empty` for missing or invalid output artifacts.
-- `invalid_csv` for CSV artifacts that pandas cannot read.
-- `stale` when an output is older than the newest source input or configuration file.
-
-The validator does not compare artifact contents against a golden hash. It checks the public artifact contract and modification times.
+Validation checks source existence and non-emptiness, required output existence and non-emptiness, CSV readability, and mtime-based staleness. It does not hash file contents or prove statistical validity. The pipeline itself performs input, inventory, and generated-public-output privacy checks.

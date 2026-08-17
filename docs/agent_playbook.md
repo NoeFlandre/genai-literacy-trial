@@ -71,6 +71,12 @@ uv run ruff check .
 uv run ty check .
 ```
 
+Build the public documentation:
+
+```bash
+uv run mkdocs build --strict --site-dir /tmp/genai-literacy-trial-site
+```
+
 Run tests:
 
 ```bash
@@ -105,7 +111,7 @@ uv run genai-literacy-trial audit-privacy --root repro_outputs/small/public
 
 The `scripts/` commands are wrappers around package modules. When changing smoke or hygiene behavior, edit `src/genai_literacy_trial/` and keep `python -m genai_literacy_trial.reproduce_small`, `python -m genai_literacy_trial.validate_artifacts`, and `python -m genai_literacy_trial.repo_hygiene` working.
 
-Ruff lint and `ty` type checking are configured. Keep both checks passing when changing typed interfaces or pandas transformations.
+Ruff lint, `ty` type checking, and the strict MkDocs build are configured. Keep all three checks passing when changing typed interfaces, pandas transformations, public docs, or navigation.
 
 ## Working With Artifacts
 

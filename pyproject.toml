@@ -26,6 +26,7 @@ genai-literacy-check-repo-hygiene = "genai_literacy_trial.repo_hygiene:main"
 
 [dependency-groups]
 dev = [
+  "mkdocs-material>=9.6",
   "pytest>=8.2",
   "ruff>=0.15.15",
   "ty>=0.0.72",

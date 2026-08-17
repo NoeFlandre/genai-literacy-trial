@@ -1,159 +1,53 @@
 # Data Flow
 
-The repository has two analysis paths: the main quantitative pipeline and an older aggregate-paper pipeline.
+## Quantitative path
 
-For concise visual summaries, see `docs/diagrams.md`.
-
-## Main Quantitative Pipeline
-
-Entry points:
-
-```bash
-uv run python scripts/reproduce_small.py
-uv run genai-literacy-trial analyze-quant ...
+```mermaid
+flowchart TB
+    S["survey.csv or survey.xlsx"] --> Load["_read_input"]
+    G["grades.csv or grades.xlsx"] --> Load
+    P["prompts.csv or prompts.xlsx"] --> Load
+    C["quant_config.template.toml"] --> Config["load_quant_config"]
+    I["expected_inventory.template.toml"] --> Inventory["inventory validation"]
+    Load --> Validate["input schema and numeric validation"]
+    Config --> Validate
+    Validate --> Retain["paired pre/post retention"]
+    Retain --> Participant["participant table and survey composites"]
+    Participant --> Analyses["models, tests, correlations, sensitivity"]
+    P --> Assignments["assignment prompt table"]
+    Assignments --> Analyses
+    Inventory --> Analyses
+    Analyses --> Outputs["aggregate tables, figures, report"]
+    Outputs --> Checks["privacy scan and mtime artifact validation"]
 ```
 
-Code path:
+## Inputs and retention
 
-```text
-CLI/script
-  -> quant_pipeline.run_quant_analysis()
-  -> quant_config.load_quant_config()
-  -> quant_config.load_expected_inventory()
-  -> quant_pipeline._read_input()
-  -> quant_preprocess.prepare_retained_survey()
-  -> quant_preprocess.build_participant_table()
-  -> quant_preprocess.compute_survey_composites()
-  -> quant_pipeline._merge_pre_composites()
-  -> quant_preprocess.build_assignment_prompt_table()
-  -> quant_preprocess.prior_use_mapping_table()
-  -> quant_preprocess.validate_analysis_inventory()
-  -> quant_models and quant_stats
-  -> quant_figures
-  -> quant_report.write_quantitative_report()
-  -> privacy.scan_public_tree(public_output_dir)
-```
+The configured minimum input columns are:
 
-## Inputs
+- survey: participant ID and phase;
+- grades: participant ID, group, midterm grade, and final grade;
+- prompts: participant ID, assignment, and prompt score.
 
-The quantitative loader reads these dataset basenames from `--input-dir`:
+The remaining configured columns drive optional covariates and survey composites. The preprocessing path keeps participants with the required paired survey observations, maps configured labels and numeric values, joins grades and prompt summaries by the configured participant key, and validates group, assignment, score, duplicate-row, and expected-inventory contracts.
 
-```text
-survey.csv or survey.xlsx
-grades.csv or grades.xlsx
-prompts.csv or prompts.xlsx
-```
+Prompt assignments remain at assignment level for trajectory and missingness analyses. Participant-level analyses use one row per participant. This distinction prevents prompt rows from inflating participant-level sample sizes.
 
-It also accepts compatibility names:
+## Analysis products
 
-```text
-public_cli_input_survey.csv
-public_cli_input_grades.csv
-public_cli_input_prompts.csv
-```
+`run_quant_analysis()` produces the table contract in `quant_schema.REQUIRED_QUANT_TABLES`, then writes:
 
-The public smoke workflow uses:
+1. 19 aggregate CSV tables;
+2. three figures, each as PNG and PDF;
+3. one generated quantitative Markdown report;
+4. a privacy scan of the selected public output directory.
 
-```text
-data/synthetic/survey.csv
-data/synthetic/grades.csv
-data/synthetic/prompts.csv
-```
+The report is generated from the tables rather than from private source rows.
 
-## Identifiers And Retention
+## Legacy data flow
 
-`quant_preprocess.participant_key()` hashes source IDs with SHA-256 and truncates to 12 hex characters. Public intermediate tables use `participant_key`, not the original ID.
+`reproduce-paper` loads the three CSV files through `analysis.load_csv_inputs()`, computes prompt means and grade correlations, writes five aggregate CSVs, and validates manuscript target metrics. It is a compatibility path with a separate, older schema and output contract.
 
-`prepare_retained_survey()` keeps participants present in both configured pre and post survey phases. It reports `pre_responses`, `post_responses`, `dropouts`, `retained_participants`, and `retained_survey_rows`.
+## Output cleanup
 
-`build_participant_table()`:
-
-- filters grades to retained participants,
-- rejects conflicting duplicate grade rows,
-- maps letter grades to numeric grade points,
-- merges pre-survey optional fields such as prior use, gender, and major,
-- computes mean prompt score and scored-assignment count from prompts.
-
-`build_assignment_prompt_table()`:
-
-- drops raw transcript-like columns matching `User...` or `GPT...`,
-- hashes participant IDs,
-- merges group labels from retained participants,
-- returns assignment-level `participant_key`, `group`, `assignment`, and `prompt_score`.
-
-## Survey Composites
-
-`compute_survey_composites()` uses `config/quant_config.template.toml` survey dimensions and reverse-coded items. It normalizes configured phase labels to:
-
-```text
-pre
-post
-```
-
-Composite scores require at least half of available items for that dimension, with a minimum of one item.
-
-## Inventory Validation
-
-`validate_analysis_inventory()` checks:
-
-- one pre and one post row per retained participant,
-- unique participant-level rows,
-- groups inside configured labels,
-- assignments inside configured labels,
-- prompt scores between 1 and 5,
-- no transcript columns after prompt preprocessing,
-- optional expected inventory counts.
-
-When an expected-inventory TOML is supplied, mismatches raise `ValueError`.
-
-## Outputs
-
-The main pipeline writes:
-
-```text
-<public-output-dir>/table_*.csv
-<public-output-dir>/fig_*.pdf
-<public-output-dir>/fig_*.png
-<public-output-dir>/quantitative_report.md
-```
-
-It creates the private/local diagnostics directory passed as `--output-dir`, but the current pipeline does not write substantive diagnostic files there.
-
-## Cache And Cleanup Behavior
-
-There is no content-addressed cache and no run manifest.
-
-Before a quantitative run writes public outputs, `_clean_public_output_dir()` deletes only top-level files in `--public-output-dir` whose suffix is one of:
-
-```text
-.csv
-.pdf
-.png
-.md
-```
-
-It preserves nested directories and files with other suffixes, such as `notes.txt`.
-
-`scripts/validate_artifacts.py` treats an output as stale if it is older than any input/config source file used for the small run. This is mtime-based only.
-
-## Legacy Aggregate-Paper Pipeline
-
-Entry points:
-
-```bash
-uv run genai-literacy-trial build-aggregates
-uv run genai-literacy-trial validate-paper
-uv run genai-literacy-trial reproduce-paper
-```
-
-This path reads `survey.csv`, `grades.csv`, and `prompts.csv`; it does not use the TOML quantitative config. It writes top-level aggregate CSVs such as:
-
-```text
-sample_summary.csv
-prompt_training_means.csv
-prompt_grade_correlations.csv
-paper_statistics.csv
-validation_report.csv
-```
-
-By default those files go to `paper_outputs/`.
+Before writing the quantitative public directory, the pipeline removes only existing top-level files with generated suffixes `.csv`, `.pdf`, `.png`, and `.md`. It does not remove nested files or unrelated suffixes. Use a fresh ignored directory when the output contents need to be unambiguous.
