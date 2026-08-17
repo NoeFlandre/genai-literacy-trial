@@ -2,19 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd
 import typer
-
-from genai_literacy_trial.analysis import (
-    build_paper_aggregates,
-    load_csv_inputs,
-    observed_metrics_from_outputs,
-    validate_against_targets,
-    write_aggregate_outputs,
-)
-from genai_literacy_trial.privacy import scan_public_tree
-from genai_literacy_trial.quant_pipeline import run_quant_analysis
-from genai_literacy_trial.quant_schema import PUBLIC_OUTPUT_DIR_KEY
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -24,6 +12,8 @@ def build_aggregates(
     input_dir: Path = typer.Option(Path("data/synthetic"), help="Directory containing survey.csv, grades.csv, and prompts.csv."),
     output_dir: Path = typer.Option(Path("paper_outputs"), help="Directory for aggregate-only outputs."),
 ) -> None:
+    from genai_literacy_trial.analysis import build_paper_aggregates, load_csv_inputs, write_aggregate_outputs
+
     survey, grades, prompts = load_csv_inputs(input_dir)
     outputs = build_paper_aggregates(survey=survey, grades=grades, prompts=prompts)
     write_aggregate_outputs(outputs, output_dir)
@@ -34,6 +24,10 @@ def build_aggregates(
 def validate_paper(
     output_dir: Path = typer.Option(Path("paper_outputs"), help="Directory containing aggregate outputs."),
 ) -> None:
+    import pandas as pd
+
+    from genai_literacy_trial.analysis import observed_metrics_from_outputs, validate_against_targets
+
     observed = {}
     statistics_path = output_dir / "paper_statistics.csv"
     if statistics_path.exists():
@@ -57,6 +51,8 @@ def reproduce_paper(
     input_dir: Path = typer.Option(Path("data/synthetic"), help="Directory containing public synthetic CSV fixtures."),
     output_dir: Path = typer.Option(Path("paper_outputs"), help="Directory for aggregate-only paper outputs."),
 ) -> None:
+    from genai_literacy_trial.analysis import build_paper_aggregates, load_csv_inputs, observed_metrics_from_outputs, validate_against_targets, write_aggregate_outputs
+
     survey, grades, prompts = load_csv_inputs(input_dir)
     outputs = build_paper_aggregates(survey=survey, grades=grades, prompts=prompts)
     write_aggregate_outputs(outputs, output_dir)
@@ -70,6 +66,8 @@ def audit_privacy(
     root: Path = typer.Option(Path("."), help="Repository root to scan."),
     local_patterns: Path | None = typer.Option(None, help="Optional ignored YAML file with additional private patterns."),
 ) -> None:
+    from genai_literacy_trial.privacy import scan_public_tree
+
     findings = scan_public_tree(root, local_pattern_file=local_patterns)
     if not findings:
         typer.echo("Privacy audit passed: no public personal-data patterns found.")
@@ -87,6 +85,9 @@ def analyze_quant(
     output_dir: Path = typer.Option(Path("private_outputs/quantitative"), help="Ignored private output directory for diagnostics."),
     public_output_dir: Path = typer.Option(Path("paper_outputs/quantitative"), help="Aggregate-only public output directory."),
 ) -> None:
+    from genai_literacy_trial.quant_pipeline import run_quant_analysis
+    from genai_literacy_trial.quant_schema import PUBLIC_OUTPUT_DIR_KEY
+
     paths = run_quant_analysis(input_dir, config, expected_inventory, output_dir, public_output_dir)
     typer.echo(f"Quantitative analysis complete. Public outputs: {paths[PUBLIC_OUTPUT_DIR_KEY]}")
     typer.echo("Privacy audit passed for generated public outputs.")
