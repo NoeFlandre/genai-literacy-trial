@@ -93,3 +93,33 @@ def test_analyze_quant_cli_cleans_stale_public_outputs(tmp_path: Path) -> None:
         assert (public_dir / name).exists(), name
     assert nested_stale.exists()
     assert preserved.exists()
+
+
+def test_analyze_quant_cli_fails_on_expected_inventory_mismatch(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "private"
+    public_dir = tmp_path / "public"
+    expected_inventory = tmp_path / "expected_inventory.toml"
+    write_synthetic_quant_input(input_dir)
+    expected_inventory.write_text("pre_responses = 999\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "analyze-quant",
+            "--input-dir",
+            str(input_dir),
+            "--config",
+            "config/quant_config.template.toml",
+            "--expected-inventory",
+            str(expected_inventory),
+            "--output-dir",
+            str(output_dir),
+            "--public-output-dir",
+            str(public_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert result.exception is not None
+    assert "Inventory mismatch for pre_responses" in str(result.exception)

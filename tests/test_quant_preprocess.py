@@ -46,6 +46,31 @@ def test_preprocess_builds_retained_participant_and_assignment_tables() -> None:
     assert assignment["prompt_score"].dropna().between(1, 5).all()
 
 
+def test_dropout_prompt_rows_do_not_leak_into_participant_or_assignment_tables() -> None:
+    survey, grades, prompts = synthetic_quant_frames()
+    config = QuantConfig.default()
+
+    retained, _ = prepare_retained_survey(survey, config)
+    participant = build_participant_table(retained, grades, prompts, config)
+    assignment = build_assignment_prompt_table(prompts, participant, config)
+    dropout_key = participant_key("p06")
+
+    assert dropout_key not in set(participant[PARTICIPANT_KEY_COLUMN])
+    assert dropout_key not in set(assignment[PARTICIPANT_KEY_COLUMN])
+    assert len(assignment) == 20
+
+
+def test_build_participant_table_rejects_duplicate_participant_assignment_rows() -> None:
+    survey, grades, prompts = synthetic_quant_frames()
+    config = QuantConfig.default()
+    prompts = pd.concat([prompts, prompts.iloc[[0]].copy()], ignore_index=True)
+
+    retained, _ = prepare_retained_survey(survey, config)
+
+    with pytest.raises(ValueError, match="Duplicate prompt rows.*assignment"):
+        build_participant_table(retained, grades, prompts, config)
+
+
 def test_build_participant_table_allows_exact_duplicate_grade_rows() -> None:
     survey, grades, prompts = synthetic_quant_frames()
     config = QuantConfig.default()

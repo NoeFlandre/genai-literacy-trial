@@ -68,13 +68,67 @@ def _read_input(input_dir: Path, name: str) -> pd.DataFrame:
         path = input_dir / f"{name}.{suffix}"
         reader = INPUT_READERS.get(suffix)
         if reader is not None and path.exists():
-            return reader(path)
+            try:
+                return reader(path)
+            except pd.errors.EmptyDataError as exc:
+                raise ValueError(f"Input dataset {name} is empty: {path}") from exc
     # compatibility with clean_private_data CLI input names
     alt = input_dir / f"{COMPATIBILITY_INPUT_PREFIX}{name}.csv"
     if alt.exists():
-        return pd.read_csv(alt)
+        try:
+            return pd.read_csv(alt)
+        except pd.errors.EmptyDataError as exc:
+            raise ValueError(f"Input dataset {name} is empty: {alt}") from exc
     expected = " or ".join(f"{name}.{suffix}" for suffix in INPUT_FILE_FORMATS)
     raise FileNotFoundError(f"Missing {expected} in {input_dir}")
+
+
+def _sample_bad_values(series: pd.Series, mask: pd.Series, limit: int = 3) -> str:
+    values = [str(value) for value in series.loc[mask].dropna().unique()[:limit]]
+    return ", ".join(values)
+
+
+def _validate_quant_input_frames(survey: pd.DataFrame, grades: pd.DataFrame, prompts: pd.DataFrame, config: QuantConfig) -> None:
+    c = config.columns
+    required_columns = {
+        "survey": (c.id, c.phase),
+        "grades": (c.id, c.group, c.midterm_grade, c.final_grade),
+        "prompts": (c.id, c.assignment, c.prompt_score),
+    }
+    frames = {"survey": survey, "grades": grades, "prompts": prompts}
+    issues: list[str] = []
+    usable: set[str] = set()
+    for name, frame in frames.items():
+        if frame.empty:
+            issues.append(f"{name} is empty")
+        missing = [column for column in required_columns[name] if column not in frame.columns]
+        if missing:
+            issues.append(f"{name} is missing required columns: {', '.join(missing)}")
+            continue
+        usable.add(name)
+
+    if "prompts" in usable:
+        assignment = pd.to_numeric(prompts[c.assignment], errors="coerce")
+        bad_assignment = prompts[c.assignment].notna() & assignment.isna()
+        if bad_assignment.any():
+            issues.append(f"prompts contains nonnumeric assignment values: {_sample_bad_values(prompts[c.assignment], bad_assignment)}")
+        nonfinite_assignment = assignment.notna() & ~np.isfinite(assignment.astype(float))
+        if nonfinite_assignment.any():
+            issues.append(f"prompts contains nonfinite assignment values: {_sample_bad_values(prompts[c.assignment], nonfinite_assignment)}")
+        noninteger_assignment = assignment.notna() & np.isfinite(assignment.astype(float)) & (assignment.astype(float) % 1 != 0)
+        if noninteger_assignment.any():
+            issues.append(f"prompts contains noninteger assignment values: {_sample_bad_values(prompts[c.assignment], noninteger_assignment)}")
+
+        prompt_score = pd.to_numeric(prompts[c.prompt_score], errors="coerce")
+        bad_prompt_score = prompts[c.prompt_score].notna() & prompt_score.isna()
+        if bad_prompt_score.any():
+            issues.append(f"prompts contains nonnumeric prompt_score values: {_sample_bad_values(prompts[c.prompt_score], bad_prompt_score)}")
+        nonfinite_prompt_score = prompt_score.notna() & ~np.isfinite(prompt_score.astype(float))
+        if nonfinite_prompt_score.any():
+            issues.append(f"prompts contains nonfinite prompt_score values: {_sample_bad_values(prompts[c.prompt_score], nonfinite_prompt_score)}")
+
+    if issues:
+        raise ValueError("Invalid quantitative inputs: " + "; ".join(issues))
 
 
 def _clean_public_output_dir(public_output_dir: Path) -> None:
@@ -141,7 +195,8 @@ def _reliability(composites_source: pd.DataFrame, config: QuantConfig) -> pd.Dat
 def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_path: Path | None, output_dir: Path, public_output_dir: Path) -> QuantPathMap:
     config = load_quant_config(config_path)
     expected = load_expected_inventory(expected_inventory_path)
-    survey, grades, prompts = (_read_input(input_dir, name) for name in INPUT_DATASETS)
+    survey, grades, prompts = tuple(_read_input(input_dir, name) for name in INPUT_DATASETS)
+    _validate_quant_input_frames(survey, grades, prompts, config)
 
     retained, retention_summary = prepare_retained_survey(survey, config)
     participant = build_participant_table(retained, grades, prompts, config)

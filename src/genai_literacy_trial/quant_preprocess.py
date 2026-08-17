@@ -77,8 +77,30 @@ def _validate_grade_key_consistency(grade_df: pd.DataFrame, participant_key_col:
         raise ValueError(f"Conflicting grade rows for participant_key in: {joined}")
 
 
+def _validate_prompt_assignment_uniqueness(prompts: pd.DataFrame, config: QuantConfig) -> None:
+    c = config.columns
+    if c.id not in prompts.columns or c.assignment not in prompts.columns:
+        return
+    prompt_keys = prompts[[c.id, c.assignment]].copy()
+    prompt_keys[PARTICIPANT_KEY_COLUMN] = prompt_keys[c.id].map(participant_key)
+    duplicated = prompt_keys.duplicated([PARTICIPANT_KEY_COLUMN, c.assignment], keep=False)
+    if not duplicated.any():
+        return
+    examples = (
+        prompt_keys.loc[duplicated, [PARTICIPANT_KEY_COLUMN, c.assignment]]
+        .drop_duplicates()
+        .head(3)
+    )
+    sample = "; ".join(
+        f"{row[PARTICIPANT_KEY_COLUMN]} assignment {row[c.assignment]}"
+        for _, row in examples.iterrows()
+    )
+    raise ValueError(f"Duplicate prompt rows for participant assignment: {sample}")
+
+
 def build_participant_table(survey: pd.DataFrame, grades: pd.DataFrame, prompts: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
     c = config.columns
+    _validate_prompt_assignment_uniqueness(prompts, config)
     grade_df = grades.copy()
     grade_df[PARTICIPANT_KEY_COLUMN] = grade_df[c.id].map(participant_key)
     retained_keys = set(survey[PARTICIPANT_KEY_COLUMN]) if PARTICIPANT_KEY_COLUMN in survey.columns else set(survey[c.id].map(participant_key))
@@ -130,6 +152,7 @@ def build_participant_table(survey: pd.DataFrame, grades: pd.DataFrame, prompts:
 
 def build_assignment_prompt_table(prompts: pd.DataFrame, grades_or_participants: pd.DataFrame, config: QuantConfig) -> pd.DataFrame:
     c = config.columns
+    _validate_prompt_assignment_uniqueness(prompts, config)
     transcript_cols = [col for col in prompts.columns if TRANSCRIPT_RE.search(str(col))]
     df = prompts.drop(columns=transcript_cols).copy()
     df[PARTICIPANT_KEY_COLUMN] = df[c.id].map(participant_key)

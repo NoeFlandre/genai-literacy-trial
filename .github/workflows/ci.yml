@@ -13,7 +13,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: uv sync --dev
+      - run: uv lock --check
+      - run: uv sync --locked --dev
+      - run: uv run ruff check .
       - run: uv run pytest
+      - run: uv run python scripts/reproduce_small.py
+      - run: uv run python scripts/validate_artifacts.py --mode small --public-output-dir repro_outputs/small/public
+      - run: uv run genai-literacy-trial audit-privacy --root repro_outputs/small/public
+      - run: uv run python scripts/check_repo_hygiene.py
       - run: uv run genai-literacy-trial audit-privacy
-

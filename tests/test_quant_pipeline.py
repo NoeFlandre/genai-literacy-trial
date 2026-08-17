@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
+import pytest
 
 from genai_literacy_trial.quant_config import QuantConfig
 from genai_literacy_trial.quant_pipeline import (
@@ -14,11 +17,13 @@ from genai_literacy_trial.quant_pipeline import (
     _calibration_forest_source,
     _read_input,
     _merge_pre_composites,
+    run_quant_analysis,
 )
 from genai_literacy_trial.quant_figures import FIGURE_FORMATS
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME
 from genai_literacy_trial.quant_preprocess import compute_survey_composites, participant_key
 from genai_literacy_trial.quant_schema import PARTICIPANT_KEY_COLUMN, QUANT_TABLE_OUTPUT_FORMAT
+from tests.quant_fixtures import write_synthetic_quant_input
 
 
 def test_merge_pre_composites_uses_normalized_pre_phase_from_composites() -> None:
@@ -83,3 +88,54 @@ def test_calibration_forest_source_preserves_empty_table_fallback_schema() -> No
 
     assert list(observed.columns) == list(EMPTY_CALIBRATION_FOREST_COLUMNS)
     assert observed.to_dict("records") == [EMPTY_CALIBRATION_FOREST_ROW]
+
+
+def test_run_quant_analysis_fails_fast_on_missing_required_input_columns(tmp_path) -> None:
+    input_dir = tmp_path / "input"
+    write_synthetic_quant_input(input_dir)
+    survey = pd.read_csv(input_dir / "survey.csv").drop(columns=["phase"])
+    survey.to_csv(input_dir / "survey.csv", index=False)
+
+    with pytest.raises(ValueError, match="survey.*missing required columns.*phase"):
+        run_quant_analysis(
+            input_dir,
+            Path("config/quant_config.template.toml"),
+            Path("config/expected_inventory.template.toml"),
+            tmp_path / "private",
+            tmp_path / "public",
+        )
+
+
+def test_run_quant_analysis_fails_fast_on_empty_input_tables(tmp_path) -> None:
+    input_dir = tmp_path / "input"
+    write_synthetic_quant_input(input_dir)
+    pd.read_csv(input_dir / "grades.csv").iloc[0:0].to_csv(input_dir / "grades.csv", index=False)
+
+    with pytest.raises(ValueError, match="grades.*empty"):
+        run_quant_analysis(
+            input_dir,
+            Path("config/quant_config.template.toml"),
+            Path("config/expected_inventory.template.toml"),
+            tmp_path / "private",
+            tmp_path / "public",
+        )
+
+
+def test_run_quant_analysis_reports_malformed_prompt_rows_before_modeling(tmp_path) -> None:
+    input_dir = tmp_path / "input"
+    write_synthetic_quant_input(input_dir)
+    prompts = pd.read_csv(input_dir / "prompts.csv")
+    prompts["assignment"] = prompts["assignment"].astype(object)
+    prompts["prompt_score"] = prompts["prompt_score"].astype(object)
+    prompts.loc[0, "assignment"] = "first"
+    prompts.loc[1, "prompt_score"] = "not numeric"
+    prompts.to_csv(input_dir / "prompts.csv", index=False)
+
+    with pytest.raises(ValueError, match="prompts.*assignment.*first.*prompt_score.*not numeric"):
+        run_quant_analysis(
+            input_dir,
+            Path("config/quant_config.template.toml"),
+            Path("config/expected_inventory.template.toml"),
+            tmp_path / "private",
+            tmp_path / "public",
+        )

@@ -20,10 +20,14 @@ dependencies = [
 
 [project.scripts]
 genai-literacy-trial = "genai_literacy_trial.cli:app"
+genai-literacy-reproduce-small = "genai_literacy_trial.reproduce_small:main"
+genai-literacy-validate-artifacts = "genai_literacy_trial.validate_artifacts:main"
+genai-literacy-check-repo-hygiene = "genai_literacy_trial.repo_hygiene:main"
 
 [dependency-groups]
 dev = [
   "pytest>=8.2",
+  "ruff>=0.15.15",
 ]
 
 [build-system]
@@ -34,3 +38,8 @@ build-backend = "hatchling.build"
 testpaths = ["tests"]
 addopts = "-q"
 
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*.py" = ["E402"]

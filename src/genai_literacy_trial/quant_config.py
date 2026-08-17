@@ -67,23 +67,41 @@ class QuantConfig:
 
 def load_quant_config(path: Path | None) -> QuantConfig:
     if path is None:
-        return QuantConfig.default()
+        return _validate_quant_config(QuantConfig.default())
     default = QuantConfig.default()
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     columns = QuantColumns(**data.get("columns", {}))
     labels = data.get("labels", {})
-    return QuantConfig(
-        columns=columns,
-        pre_label=str(labels.get("pre", default.pre_label)),
-        post_label=str(labels.get("post", default.post_label)),
-        groups=tuple(str(x) for x in labels.get("groups", default.groups)),
-        assignments=tuple(int(x) for x in labels.get("assignments", default.assignments)),
-        min_public_cell_count=int(data.get("privacy", {}).get("min_public_cell_count", default.min_public_cell_count)),
-        survey_dimensions={str(k): list(v) for k, v in data.get("survey_dimensions", default.survey_dimensions).items()},
-        reverse_coded_items={str(k): list(v) for k, v in data.get("reverse_coded_items", default.reverse_coded_items).items()},
-        likert_mapping={str(k): float(v) for k, v in data.get("likert_mapping", default.likert_mapping).items()},
-        grade_mapping={str(k): float(v) for k, v in data.get("grade_mapping", default.grade_mapping).items()},
+    return _validate_quant_config(
+        QuantConfig(
+            columns=columns,
+            pre_label=str(labels.get("pre", default.pre_label)),
+            post_label=str(labels.get("post", default.post_label)),
+            groups=tuple(str(x) for x in labels.get("groups", default.groups)),
+            assignments=tuple(int(x) for x in labels.get("assignments", default.assignments)),
+            min_public_cell_count=int(data.get("privacy", {}).get("min_public_cell_count", default.min_public_cell_count)),
+            survey_dimensions={str(k): list(v) for k, v in data.get("survey_dimensions", default.survey_dimensions).items()},
+            reverse_coded_items={str(k): list(v) for k, v in data.get("reverse_coded_items", default.reverse_coded_items).items()},
+            likert_mapping={str(k): float(v) for k, v in data.get("likert_mapping", default.likert_mapping).items()},
+            grade_mapping={str(k): float(v) for k, v in data.get("grade_mapping", default.grade_mapping).items()},
+        )
     )
+
+
+def _validate_quant_config(config: QuantConfig) -> QuantConfig:
+    if config.pre_label == config.post_label:
+        raise ValueError("pre and post labels must differ")
+    if not config.groups:
+        raise ValueError("groups must include at least one label")
+    if len(set(config.groups)) != len(config.groups):
+        raise ValueError("groups must be unique")
+    if not config.assignments:
+        raise ValueError("assignments must include at least one value")
+    if len(set(config.assignments)) != len(config.assignments):
+        raise ValueError("assignments must be unique")
+    if config.min_public_cell_count < 1:
+        raise ValueError("min_public_cell_count must be at least 1")
+    return config
 
 
 def load_expected_inventory(path: Path | None) -> ExpectedInventory:

@@ -47,6 +47,12 @@ def test_correlation_fdr_reliability_and_sensitivity_outputs() -> None:
     assert sensitivity["detectable_r_n45_80_power"] > 0.3
 
 
+def test_benjamini_hochberg_preserves_original_order_and_handles_missing_p_values() -> None:
+    adjusted = benjamini_hochberg(pd.Series([0.04, np.nan, 0.01, 0.03]))
+
+    assert np.allclose(adjusted, [0.05333333333333334, 1.0, 0.04, 0.05333333333333334])
+
+
 def test_welch_anova_returns_nan_for_small_groups() -> None:
     frame = pd.DataFrame(
         {
