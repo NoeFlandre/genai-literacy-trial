@@ -67,7 +67,9 @@ def _validate_source_files(paths: Sequence[Path]) -> list[ValidationIssue]:
     for path in paths:
         if not path.exists():
             issues.append(ValidationIssue("missing_source", path, "required source file is missing"))
-        elif path.is_file() and path.stat().st_size == 0:
+        elif not path.is_file():
+            issues.append(ValidationIssue("not_file", path, "required source path is not a file"))
+        elif path.stat().st_size == 0:
             issues.append(ValidationIssue("empty_source", path, "required source file is empty"))
     return issues
 

@@ -8,6 +8,18 @@ import pytest
 from genai_literacy_trial import validate_artifacts
 
 
+def test_validate_source_files_rejects_existing_directory_as_source(tmp_path: Path) -> None:
+    path = tmp_path / "survey.csv"
+    path.mkdir()
+
+    issues = validate_artifacts._validate_source_files((path,))
+
+    assert len(issues) == 1
+    assert issues[0].status == "not_file"
+    assert issues[0].path == path
+    assert issues[0].detail == "required source path is not a file"
+
+
 def test_validate_csv_reports_parser_errors_as_invalid_csv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "input.csv"
     path.write_text("participant_id\n1\n", encoding="utf-8")
