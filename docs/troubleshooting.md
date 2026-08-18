@@ -29,6 +29,8 @@ When `--expected-inventory` is supplied, observed counts must match the TOML con
 
 If the command reports `Expected inventory file not found`, check the path passed to `--expected-inventory`. Omit the option only when inventory validation is intentionally not required.
 
+Errors such as `Unknown expected inventory keys` or `must be a non-negative integer` indicate a malformed inventory contract. Fix the TOML key or value type rather than changing source counts.
+
 ## Stale artifacts
 
 Run:

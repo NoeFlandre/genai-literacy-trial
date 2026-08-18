@@ -26,6 +26,8 @@ The loader rejects identical pre/post labels, duplicate groups or assignments, e
 
 The file is optional only when `--expected-inventory` is omitted from `analyze-quant`. If the option is supplied, the path must exist and contain valid TOML; observed counts must match the contract. A missing explicit path fails before modeling instead of silently disabling inventory validation. The file is always part of the public smoke path.
 
+Inventory files may contain a partial set of known keys. Unknown keys and values that are not non-negative integers fail before modeling.
+
 ## Input names and columns
 
 The quantitative loader searches the input directory for:

@@ -41,6 +41,31 @@ def test_missing_explicit_expected_inventory_path_fails_fast(tmp_path: Path) -> 
         load_expected_inventory(missing)
 
 
+def test_load_expected_inventory_accepts_partial_known_inventory(tmp_path: Path) -> None:
+    path = tmp_path / "partial_expected_inventory.toml"
+    path.write_text("[group_counts]\nA = 2\n", encoding="utf-8")
+
+    assert load_expected_inventory(path) == {"group_counts": {"A": 2}}
+
+
+@pytest.mark.parametrize(
+    ("toml_text", "message"),
+    [
+        ("pre_response = 6\n", "Unknown expected inventory keys: pre_response"),
+        ("pre_responses = \"6\"\n", "pre_responses must be a non-negative integer"),
+        ("pre_responses = -1\n", "pre_responses must be a non-negative integer"),
+        ("group_counts = 1\n", "group_counts must be a table"),
+        ("[group_counts]\nA = \"2\"\n", "group_counts.A must be a non-negative integer"),
+    ],
+)
+def test_load_expected_inventory_rejects_invalid_schema(tmp_path: Path, toml_text: str, message: str) -> None:
+    path = tmp_path / "invalid_expected_inventory.toml"
+    path.write_text(toml_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_expected_inventory(path)
+
+
 def test_expected_inventory_declares_known_inventory_keys() -> None:
     assert get_type_hints(ExpectedInventory) == {
         "pre_responses": int,

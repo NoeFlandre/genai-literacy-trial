@@ -19,6 +19,18 @@ class ExpectedInventory(TypedDict, total=False):
     group_counts: dict[str, int]
 
 
+_EXPECTED_INVENTORY_SCALAR_KEYS = (
+    "pre_responses",
+    "post_responses",
+    "retained_participants",
+    "retained_survey_rows",
+    "prompt_assignment_rows",
+    "scored_prompt_observations",
+    "missing_prompt_scores",
+)
+_EXPECTED_INVENTORY_KEYS = frozenset((*_EXPECTED_INVENTORY_SCALAR_KEYS, "group_counts"))
+
+
 @dataclass(frozen=True)
 class QuantColumns:
     id: str = "participant_id"
@@ -109,4 +121,24 @@ def load_expected_inventory(path: Path | None) -> ExpectedInventory:
         return {}
     if not path.exists():
         raise FileNotFoundError(f"Expected inventory file not found: {path}")
-    return cast(ExpectedInventory, tomllib.loads(path.read_text(encoding="utf-8")))
+    data = cast(dict[str, object], tomllib.loads(path.read_text(encoding="utf-8")))
+    unknown_keys = sorted(set(data) - _EXPECTED_INVENTORY_KEYS)
+    if unknown_keys:
+        raise ValueError(f"Unknown expected inventory keys: {', '.join(unknown_keys)}: {path}")
+
+    for key in _EXPECTED_INVENTORY_SCALAR_KEYS:
+        value = data.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
+            raise ValueError(f"{key} must be a non-negative integer: {path}")
+
+    if "group_counts" in data:
+        group_counts = data["group_counts"]
+        if not isinstance(group_counts, dict):
+            raise ValueError(f"group_counts must be a table: {path}")
+        for group, value in group_counts.items():
+            if not isinstance(group, str):
+                raise ValueError(f"group_counts keys must be strings: {path}")
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"group_counts.{group} must be a non-negative integer: {path}")
+
+    return cast(ExpectedInventory, data)
