@@ -77,7 +77,7 @@ def _validate_csv(path: Path, required_columns: Sequence[str]) -> ValidationIssu
         table = pd.read_csv(path, nrows=1)
     except pd.errors.EmptyDataError:
         return ValidationIssue("empty", path, "CSV has no header row")
-    except Exception as exc:
+    except (OSError, UnicodeDecodeError, pd.errors.ParserError) as exc:
         return ValidationIssue("invalid_csv", path, f"CSV could not be read: {exc}")
     if len(table.columns) == 0:
         return ValidationIssue("invalid_csv", path, "CSV has no columns")
