@@ -121,7 +121,7 @@ Avoid changing checked-in `paper_outputs/` unless the task explicitly asks to up
 
 `analyze-quant` cleans top-level generated-style files in the public output directory before writing. Generated suffixes are `.csv`, `.pdf`, `.png`, and `.md`. Nested files and other suffixes are preserved.
 
-`scripts/validate_artifacts.py` checks required small-run outputs and mtime staleness. It does not compare content hashes.
+`scripts/validate_artifacts.py` checks required small-run outputs and mtime staleness. With `--manifest`, it also validates SHA-256 hashes for configured sources and generated public outputs.
 
 ## Working With Private Data Assumptions
 

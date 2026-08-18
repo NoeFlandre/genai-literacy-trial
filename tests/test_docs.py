@@ -28,3 +28,10 @@ def test_public_mkdocs_site_has_verified_navigation_and_ci_build() -> None:
     nav = config.split("\nnav:", maxsplit=1)[1]
     assert "agent_playbook.md" not in nav
     assert "mkdocs build --strict" in ci
+
+
+def test_agent_playbook_documents_optional_manifest_hash_validation() -> None:
+    playbook = (REPO_ROOT / "docs" / "agent_playbook.md").read_text(encoding="utf-8")
+
+    assert "It does not compare content hashes." not in playbook
+    assert "With `--manifest`, it also validates SHA-256 hashes" in playbook
