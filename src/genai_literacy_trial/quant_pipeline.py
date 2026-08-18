@@ -65,14 +65,20 @@ EMPTY_CALIBRATION_FOREST_COLUMNS = tuple(EMPTY_CALIBRATION_FOREST_ROW)
 
 
 def _read_input(input_dir: Path, name: str) -> pd.DataFrame:
-    for suffix in INPUT_FILE_FORMATS:
-        path = input_dir / f"{name}.{suffix}"
-        reader = INPUT_READERS.get(suffix)
-        if reader is not None and path.exists():
-            try:
-                return reader(path)
-            except pd.errors.EmptyDataError as exc:
-                raise ValueError(f"Input dataset {name} is empty: {path}") from exc
+    candidates = [
+        (input_dir / f"{name}.{suffix}", INPUT_READERS[suffix])
+        for suffix in INPUT_FILE_FORMATS
+        if suffix in INPUT_READERS and (input_dir / f"{name}.{suffix}").exists()
+    ]
+    if len(candidates) > 1:
+        names = ", ".join(path.name for path, _ in candidates)
+        raise ValueError(f"Multiple input files found for {name}: {names}; keep exactly one primary input file")
+    if candidates:
+        path, reader = candidates[0]
+        try:
+            return reader(path)
+        except pd.errors.EmptyDataError as exc:
+            raise ValueError(f"Input dataset {name} is empty: {path}") from exc
     # compatibility with clean_private_data CLI input names
     alt = input_dir / f"{COMPATIBILITY_INPUT_PREFIX}{name}.csv"
     if alt.exists():

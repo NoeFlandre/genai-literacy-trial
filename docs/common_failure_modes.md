@@ -66,6 +66,15 @@ Prevention:
 - Add tiny fixture tests for each new input shape.
 - Do not coerce malformed scientific values to missing unless that policy is explicitly documented.
 
+## Ambiguous Input Files
+
+Failure: both CSV and XLSX versions of the same dataset are present, so a run could use an unintended or stale source.
+
+Prevention:
+
+- Keep exactly one primary input format for each of `survey`, `grades`, and `prompts`.
+- Remove or relocate the unused file before rerunning the quantitative workflow.
+
 ## Duplicate Prompt Assignment Rows
 
 Failure: multiple prompt rows for one participant/assignment silently bias participant mean prompt quality and prompt-observation counts.

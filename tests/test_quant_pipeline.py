@@ -73,6 +73,15 @@ def test_read_input_honors_configured_file_formats(monkeypatch, tmp_path) -> Non
     pd.testing.assert_frame_equal(observed, expected)
 
 
+def test_read_input_rejects_multiple_primary_formats(tmp_path) -> None:
+    frame = pd.DataFrame({"value": [1, 2]})
+    frame.to_csv(tmp_path / "survey.csv", index=False)
+    frame.to_excel(tmp_path / "survey.xlsx", index=False)
+
+    with pytest.raises(ValueError, match="Multiple input files found for survey"):
+        _read_input(tmp_path, "survey")
+
+
 def test_quant_pipeline_compatibility_input_prefix_is_explicit() -> None:
     assert COMPATIBILITY_INPUT_PREFIX == "public_cli_input_"
 

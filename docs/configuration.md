@@ -36,6 +36,8 @@ grades.csv or grades.xlsx
 prompts.csv or prompts.xlsx
 ```
 
+Provide exactly one primary file for each dataset. If both supported formats are present for the same dataset, the loader fails fast instead of choosing one implicitly.
+
 It also accepts `public_cli_input_survey.csv`, `public_cli_input_grades.csv`, and `public_cli_input_prompts.csv` for compatibility with the private cleaning workflow. Required columns are determined by `[columns]`; the public template requires an ID and phase in survey data, an ID/group/midterm/final grade in grade data, and an ID/assignment/prompt score in prompt data.
 
 The legacy aggregate path is less configurable and expects CSV files named `survey.csv`, `grades.csv`, and `prompts.csv` with its older column names.
