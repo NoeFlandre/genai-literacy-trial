@@ -23,7 +23,7 @@ def _save(fig, output_dir: Path, stem: str) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = [output_dir / f"{stem}.{suffix}" for suffix in FIGURE_FORMATS]
     for path in paths:
-        fig.savefig(path, bbox_inches="tight", dpi=300, metadata={"Creator": "genai-literacy-trial"})
+        fig.savefig(path, bbox_inches="tight", dpi=300, metadata={"Creator": "genai-literacy-trial", "CreationDate": None})
     plt.close(fig)
     return paths
 

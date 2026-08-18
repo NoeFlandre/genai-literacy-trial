@@ -79,7 +79,7 @@ The validator checks required sources, required outputs, non-empty files, CSV re
 
 ## Stale outputs
 
-Staleness is currently determined by file modification times: an output is stale when it is older than the newest relevant input or configuration file. There is no content hash or run manifest. The test suite checks byte-for-byte determinism for the generated CSV tables and Markdown report; PDF figure binaries may differ between runs because of renderer metadata. Rerun the smoke or quantitative command when `validate_artifacts.py` reports `stale`. `--allow-stale` is for inspection only.
+Staleness is currently determined by file modification times: an output is stale when it is older than the newest relevant input or configuration file. There is no content hash or run manifest. The test suite checks byte-for-byte determinism for the generated tables, figures, and Markdown report. Rerun the smoke or quantitative command when `validate_artifacts.py` reports `stale`. `--allow-stale` is for inspection only.
 
 ## Legacy path
 

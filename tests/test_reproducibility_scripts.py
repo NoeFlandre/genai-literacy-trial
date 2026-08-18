@@ -16,10 +16,6 @@ REQUIRED_SMALL_OUTPUTS = (
     *(f"{name}.{QUANT_TABLE_OUTPUT_FORMAT}" for name in REQUIRED_QUANT_TABLES),
     *(f"{stem}.{suffix}" for stem in FIGURE_STEMS for suffix in FIGURE_FORMATS),
 )
-CANONICAL_SMALL_OUTPUTS = (
-    QUANTITATIVE_REPORT_FILENAME,
-    *(f"{name}.{QUANT_TABLE_OUTPUT_FORMAT}" for name in REQUIRED_QUANT_TABLES),
-)
 
 
 def run_script(*args: str) -> subprocess.CompletedProcess[str]:
@@ -188,7 +184,7 @@ def test_reproduce_small_outputs_are_byte_deterministic(tmp_path: Path) -> None:
         )
         assert result.returncode == 0, result.stdout + result.stderr
 
-    for relative_path in CANONICAL_SMALL_OUTPUTS:
+    for relative_path in REQUIRED_SMALL_OUTPUTS:
         assert (first_public / relative_path).read_bytes() == (second_public / relative_path).read_bytes(), relative_path
 
 
