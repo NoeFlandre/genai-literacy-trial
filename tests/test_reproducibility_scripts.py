@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +38,29 @@ def run_module(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
     )
+
+
+def _run_small_with_manifest(tmp_path: Path) -> tuple[Path, Path, Path, subprocess.CompletedProcess[str]]:
+    input_dir = tmp_path / "input"
+    public_output_dir = tmp_path / "public"
+    private_output_dir = tmp_path / "private"
+    manifest = tmp_path / "manifest.json"
+    input_dir.mkdir()
+    for name in ("survey.csv", "grades.csv", "prompts.csv"):
+        shutil.copy2(REPO_ROOT / "data" / "synthetic" / name, input_dir / name)
+
+    result = run_script(
+        "scripts/reproduce_small.py",
+        "--input-dir",
+        str(input_dir),
+        "--public-output-dir",
+        str(public_output_dir),
+        "--output-dir",
+        str(private_output_dir),
+        "--manifest",
+        str(manifest),
+    )
+    return input_dir, public_output_dir, manifest, result
 
 
 def test_validate_artifacts_reports_missing_small_outputs(tmp_path: Path) -> None:
@@ -186,6 +211,71 @@ def test_reproduce_small_outputs_are_byte_deterministic(tmp_path: Path) -> None:
 
     for relative_path in REQUIRED_SMALL_OUTPUTS:
         assert (first_public / relative_path).read_bytes() == (second_public / relative_path).read_bytes(), relative_path
+
+
+def test_reproduce_small_writes_optional_manifest(tmp_path: Path) -> None:
+    _, public_output_dir, manifest, result = _run_small_with_manifest(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["version"] == 1
+    assert any(path.endswith("survey.csv") for path in payload["sources"])
+    assert any(path.endswith("table_data_verification.csv") for path in payload["outputs"])
+    assert (public_output_dir / "table_data_verification.csv").exists()
+
+
+def test_validate_artifacts_reports_manifest_source_change_with_preserved_mtime(tmp_path: Path) -> None:
+    input_dir, _, manifest, result = _run_small_with_manifest(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    source = input_dir / "survey.csv"
+    original = source.stat()
+    source.write_bytes(source.read_bytes() + b"\n")
+    os.utime(source, ns=(original.st_atime_ns, original.st_mtime_ns))
+
+    result = run_script(
+        "scripts/validate_artifacts.py",
+        "--mode",
+        "small",
+        "--input-dir",
+        str(input_dir),
+        "--config",
+        str(REPO_ROOT / "config" / "quant_config.template.toml"),
+        "--expected-inventory",
+        str(REPO_ROOT / "config" / "expected_inventory.template.toml"),
+        "--public-output-dir",
+        str(tmp_path / "public"),
+        "--manifest",
+        str(manifest),
+    )
+
+    assert result.returncode == 1
+    assert "content_changed" in result.stdout
+    assert "survey.csv" in result.stdout
+
+
+def test_validate_artifacts_reports_manifest_output_change_with_preserved_mtime(tmp_path: Path) -> None:
+    _, public_output_dir, manifest, result = _run_small_with_manifest(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    output = public_output_dir / "table_data_verification.csv"
+    original = output.stat()
+    output.write_bytes(output.read_bytes() + b"\n")
+    os.utime(output, ns=(original.st_atime_ns, original.st_mtime_ns))
+
+    result = run_script(
+        "scripts/validate_artifacts.py",
+        "--mode",
+        "small",
+        "--public-output-dir",
+        str(public_output_dir),
+        "--manifest",
+        str(manifest),
+    )
+
+    assert result.returncode == 1
+    assert "content_changed" in result.stdout
+    assert "table_data_verification.csv" in result.stdout
 
 
 def test_validate_artifacts_module_entry_point_reports_missing_outputs(tmp_path: Path) -> None:

@@ -16,7 +16,7 @@ from genai_literacy_trial.paths import (
     REPRO_SMALL_PUBLIC_DIR,
 )
 from genai_literacy_trial.quant_pipeline import run_quant_analysis
-from genai_literacy_trial.validate_artifacts import print_validation_report, validate_artifacts
+from genai_literacy_trial.validate_artifacts import print_validation_report, validate_artifacts, write_manifest
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -27,6 +27,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=REPRO_SMALL_PRIVATE_DIR, help="Local private diagnostics directory.")
     parser.add_argument("--public-output-dir", type=Path, default=REPRO_SMALL_PUBLIC_DIR, help="Public aggregate artifact directory.")
     parser.add_argument("--allow-stale", action="store_true", help="Allow validator stale-output warnings to pass.")
+    parser.add_argument("--manifest", type=Path, default=None, help="Optional path for a SHA-256 input/output manifest.")
     parser.add_argument("--show-model-warnings", action="store_true", help="Show statsmodels/numpy warnings from tiny synthetic-data model fits.")
     return parser.parse_args(argv)
 
@@ -56,6 +57,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     print_validation_report(issues)
     if issues:
         return 1
+    if args.manifest is not None:
+        write_manifest(
+            path=args.manifest,
+            mode="small",
+            input_dir=args.input_dir,
+            config=args.config,
+            expected_inventory=args.expected_inventory,
+            public_output_dir=args.public_output_dir,
+        )
+        print(f"Manifest written: {args.manifest}")
     print(f"Small reproducibility run complete. Public outputs: {paths['public_output_dir']}")
     print(f"Local diagnostics directory: {paths['private_output_dir']}")
     return 0

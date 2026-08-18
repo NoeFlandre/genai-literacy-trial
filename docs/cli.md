@@ -40,7 +40,7 @@ uv run python -m genai_literacy_trial.reproduce_small
 uv run genai-literacy-reproduce-small
 ```
 
-Useful options are `--input-dir`, `--config`, `--expected-inventory`, `--output-dir`, `--public-output-dir`, `--allow-stale`, and `--show-model-warnings`.
+Useful options are `--input-dir`, `--config`, `--expected-inventory`, `--output-dir`, `--public-output-dir`, `--allow-stale`, `--manifest`, and `--show-model-warnings`. `--manifest` writes an optional local SHA-256 record after a successful run.
 
 ## Artifact validator
 
@@ -50,7 +50,7 @@ uv run python scripts/validate_artifacts.py \
   --public-output-dir repro_outputs/small/public
 ```
 
-Equivalent forms are `python -m genai_literacy_trial.validate_artifacts` and `genai-literacy-validate-artifacts`. The validator supports `--input-dir`, `--config`, `--expected-inventory`, `--public-output-dir`, and `--allow-stale`.
+Equivalent forms are `python -m genai_literacy_trial.validate_artifacts` and `genai-literacy-validate-artifacts`. The validator supports `--input-dir`, `--config`, `--expected-inventory`, `--public-output-dir`, `--allow-stale`, and optional `--manifest` SHA-256 validation.
 
 ## Privacy and hygiene
 

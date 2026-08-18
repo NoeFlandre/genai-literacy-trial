@@ -51,6 +51,13 @@ uv run python scripts/reproduce_small.py \
 
 Use `--show-model-warnings` when diagnosing the expected small-sample statsmodels and NumPy warnings.
 
+To create an ignored content manifest alongside the smoke outputs:
+
+```bash
+uv run python scripts/reproduce_small.py \
+  --manifest repro_outputs/small/manifest.json
+```
+
 ## Full quantitative command
 
 The public equivalent is:
@@ -71,15 +78,16 @@ For an author-side full study run, replace the input and ignored private configu
 ```bash
 uv run python scripts/validate_artifacts.py \
   --mode small \
-  --public-output-dir repro_outputs/small/public
+  --public-output-dir repro_outputs/small/public \
+  --manifest repro_outputs/small/manifest.json
 uv run genai-literacy-trial audit-privacy --root repro_outputs/small/public
 ```
 
-The validator checks required sources, required outputs, non-empty files, CSV readability, and output modification times. The privacy command checks the selected publication tree.
+The validator checks required sources, required outputs, non-empty files, CSV readability, and output modification times. When `--manifest` is supplied, it also compares SHA-256 hashes for the source/configuration files and generated public outputs recorded by the smoke run. Keep manifests in ignored paths; they are local audit records, not public study data. The privacy command checks the selected publication tree.
 
 ## Stale outputs
 
-Staleness is currently determined by file modification times: an output is stale when it is older than the newest relevant input or configuration file. There is no content hash or run manifest. The test suite checks byte-for-byte determinism for the generated tables, figures, and Markdown report. Rerun the smoke or quantitative command when `validate_artifacts.py` reports `stale`. `--allow-stale` is for inspection only.
+By default, staleness is determined by file modification times: an output is stale when it is older than the newest relevant input or configuration file. For stronger freshness checks, generate and pass an optional manifest as shown above; `content_changed` means a source or output differs from the recorded SHA-256 digest. The test suite checks byte-for-byte determinism for the generated tables, figures, and Markdown report. Rerun the smoke or quantitative command when `validate_artifacts.py` reports `stale` or `content_changed`. `--allow-stale` bypasses only mtime findings and does not bypass manifest mismatches.
 
 ## Legacy path
 
