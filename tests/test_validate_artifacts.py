@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -7,6 +9,29 @@ import pandas as pd
 import pytest
 
 from genai_literacy_trial import validate_artifacts
+
+
+def _write_valid_manifest_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
+    source = tmp_path / "source.csv"
+    output = tmp_path / "output.csv"
+    manifest = tmp_path / "manifest.json"
+    source.write_text("participant_id\n1\n", encoding="utf-8")
+    output.write_text("result\n1\n", encoding="utf-8")
+
+    def digest(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": validate_artifacts.MANIFEST_VERSION,
+                "sources": {str(source): digest(source)},
+                "outputs": {str(output): digest(output)},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest, source, output
 
 
 def test_write_manifest_preserves_existing_file_when_publish_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -43,6 +68,71 @@ def test_write_manifest_preserves_existing_file_when_publish_fails(tmp_path: Pat
         )
 
     assert manifest.read_text(encoding="utf-8") == previous_contents
+
+
+def test_validate_manifest_rejects_unexpected_top_level_fields(tmp_path: Path) -> None:
+    manifest, source, output = _write_valid_manifest_fixture(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["extra"] = "unexpected"
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    issues = validate_artifacts._validate_manifest(manifest, (source,), (output,))
+
+    assert len(issues) == 1
+    assert issues[0].status == "invalid_manifest"
+    assert "unexpected top-level entries: extra" in issues[0].detail
+
+
+def test_validate_manifest_rejects_malformed_json(tmp_path: Path) -> None:
+    manifest, source, output = _write_valid_manifest_fixture(tmp_path)
+    manifest.write_text("{", encoding="utf-8")
+
+    issues = validate_artifacts._validate_manifest(manifest, (source,), (output,))
+
+    assert len(issues) == 1
+    assert issues[0].status == "invalid_manifest"
+    assert "manifest could not be read" in issues[0].detail
+
+
+def test_validate_manifest_rejects_unknown_version(tmp_path: Path) -> None:
+    manifest, source, output = _write_valid_manifest_fixture(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["version"] = validate_artifacts.MANIFEST_VERSION + 1
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    issues = validate_artifacts._validate_manifest(manifest, (source,), (output,))
+
+    assert len(issues) == 1
+    assert issues[0].status == "invalid_manifest"
+    assert f"version must be {validate_artifacts.MANIFEST_VERSION}" in issues[0].detail
+
+
+def test_validate_manifest_rejects_missing_and_extra_entries(tmp_path: Path) -> None:
+    manifest, source, output = _write_valid_manifest_fixture(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    del payload["sources"][str(source)]
+    payload["outputs"]["unexpected-output.csv"] = "0" * 64
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    issues = validate_artifacts._validate_manifest(manifest, (source,), (output,))
+
+    assert len(issues) == 2
+    assert all(issue.status == "invalid_manifest" for issue in issues)
+    assert any("missing entries" in issue.detail for issue in issues)
+    assert any("unexpected entries" in issue.detail for issue in issues)
+
+
+def test_validate_manifest_rejects_invalid_hash(tmp_path: Path) -> None:
+    manifest, source, output = _write_valid_manifest_fixture(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["outputs"][str(output)] = "not-a-sha256"
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    issues = validate_artifacts._validate_manifest(manifest, (source,), (output,))
+
+    assert len(issues) == 1
+    assert issues[0].status == "invalid_manifest"
+    assert "not a SHA-256 digest" in issues[0].detail
 
 
 def test_validate_source_files_rejects_existing_directory_as_source(tmp_path: Path) -> None:

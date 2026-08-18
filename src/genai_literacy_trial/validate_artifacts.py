@@ -159,6 +159,9 @@ def _validate_manifest(path: Path, sources: Sequence[Path], outputs: Sequence[Pa
         return [ValidationIssue("invalid_manifest", path, f"manifest could not be read: {exc}")]
     if not isinstance(payload, dict) or payload.get("version") != MANIFEST_VERSION:
         return [ValidationIssue("invalid_manifest", path, f"manifest version must be {MANIFEST_VERSION}")]
+    unexpected_keys = sorted(set(payload) - {"version", "sources", "outputs"})
+    if unexpected_keys:
+        return [ValidationIssue("invalid_manifest", path, f"manifest has unexpected top-level entries: {', '.join(unexpected_keys)}")]
 
     issues: list[ValidationIssue] = []
     for section, current_paths in (("sources", sources), ("outputs", outputs)):
