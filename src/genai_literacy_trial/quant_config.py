@@ -77,11 +77,105 @@ class QuantConfig:
         return cls()
 
 
+_CONFIG_SECTIONS = frozenset(
+    {
+        "columns",
+        "labels",
+        "privacy",
+        "survey_dimensions",
+        "reverse_coded_items",
+        "likert_mapping",
+        "grade_mapping",
+    }
+)
+_COLUMN_KEYS = frozenset(QuantColumns.__dataclass_fields__)
+_LABEL_KEYS = frozenset({"pre", "post", "groups", "assignments"})
+_PRIVACY_KEYS = frozenset({"min_public_cell_count"})
+
+
+def _as_table(value: object, section: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{section} must be a table")
+    return cast(dict[str, object], value)
+
+
+def _reject_unknown_keys(data: dict[str, object], allowed: frozenset[str], section: str) -> None:
+    unknown = sorted(set(data) - allowed)
+    if unknown:
+        raise ValueError(f"Unknown configuration keys in {section}: {', '.join(unknown)}")
+
+
+def _require_string(value: object, field: str) -> None:
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+
+
+def _require_string_list(value: object, field: str) -> None:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{field} must be an array of strings")
+
+
+def _require_integer(value: object, field: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field} must be an integer")
+
+
+def _require_integer_list(value: object, field: str) -> None:
+    if not isinstance(value, list) or any(isinstance(item, bool) or not isinstance(item, int) for item in value):
+        raise ValueError(f"{field} must be an array of integers")
+
+
+def _validate_string_list_table(value: object, section: str) -> None:
+    table = _as_table(value, section)
+    for key, items in table.items():
+        _require_string_list(items, f"{section}.{key}")
+
+
+def _validate_numeric_table(value: object, section: str) -> None:
+    table = _as_table(value, section)
+    for key, item in table.items():
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            raise ValueError(f"{section}.{key} must be a number")
+
+
+def _validate_quant_config_schema(data: object) -> None:
+    config = _as_table(data, "configuration")
+    unknown_sections = sorted(set(config) - _CONFIG_SECTIONS)
+    if unknown_sections:
+        raise ValueError(f"Unknown configuration section: {', '.join(unknown_sections)}")
+
+    columns = _as_table(config.get("columns", {}), "columns")
+    _reject_unknown_keys(columns, _COLUMN_KEYS, "columns")
+    for key, value in columns.items():
+        _require_string(value, f"columns.{key}")
+
+    labels = _as_table(config.get("labels", {}), "labels")
+    _reject_unknown_keys(labels, _LABEL_KEYS, "labels")
+    for key in ("pre", "post"):
+        if key in labels:
+            _require_string(labels[key], f"labels.{key}")
+    if "groups" in labels:
+        _require_string_list(labels["groups"], "labels.groups")
+    if "assignments" in labels:
+        _require_integer_list(labels["assignments"], "labels.assignments")
+
+    privacy = _as_table(config.get("privacy", {}), "privacy")
+    _reject_unknown_keys(privacy, _PRIVACY_KEYS, "privacy")
+    if "min_public_cell_count" in privacy:
+        _require_integer(privacy["min_public_cell_count"], "privacy.min_public_cell_count")
+
+    _validate_string_list_table(config.get("survey_dimensions", {}), "survey_dimensions")
+    _validate_string_list_table(config.get("reverse_coded_items", {}), "reverse_coded_items")
+    _validate_numeric_table(config.get("likert_mapping", {}), "likert_mapping")
+    _validate_numeric_table(config.get("grade_mapping", {}), "grade_mapping")
+
+
 def load_quant_config(path: Path | None) -> QuantConfig:
     if path is None:
         return _validate_quant_config(QuantConfig.default())
     default = QuantConfig.default()
     data = tomllib.loads(path.read_text(encoding="utf-8"))
+    _validate_quant_config_schema(data)
     columns = QuantColumns(**data.get("columns", {}))
     labels = data.get("labels", {})
     return _validate_quant_config(

@@ -31,6 +31,10 @@ If the command reports `Expected inventory file not found`, check the path passe
 
 Errors such as `Unknown expected inventory keys` or `must be a non-negative integer` indicate a malformed inventory contract. Fix the TOML key or value type rather than changing source counts.
 
+## Configuration schema errors
+
+Errors such as `Unknown configuration section`, `must be an array`, or `must be a number` indicate a malformed quantitative TOML file. Check the section names and value types against [Configuration](configuration.md); the loader does not coerce malformed values because that can change the analysis contract silently.
+
 ## Stale artifacts
 
 Run:

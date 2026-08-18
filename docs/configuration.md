@@ -14,7 +14,7 @@
 | `[likert_mapping]` | Text responses mapped to numeric values. |
 | `[grade_mapping]` | Letter grades mapped to grade points. |
 
-The loader rejects identical pre/post labels, duplicate groups or assignments, empty groups or assignments, and a suppression threshold below 1.
+The loader rejects unknown sections or fixed-section keys, wrong TOML value types, identical pre/post labels, duplicate groups or assignments, empty groups or assignments, and a suppression threshold below 1. Group and assignment settings must be arrays; mapping values must be numeric where required.
 
 ## Expected inventory
 

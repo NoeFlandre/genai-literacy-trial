@@ -144,3 +144,25 @@ def test_load_quant_config_rejects_invalid_scientific_contracts(tmp_path: Path, 
 
     with pytest.raises(ValueError, match=message):
         load_quant_config(path)
+
+
+@pytest.mark.parametrize(
+    ("toml_text", "message"),
+    [
+        ("[lables]\npre = \"baseline\"\n", "Unknown configuration section: lables"),
+        ("[columns]\nid = 1\n", "columns.id must be a string"),
+        ("[labels]\npre = 1\n", "labels.pre must be a string"),
+        ("[labels]\ngroups = \"ABC\"\n", "labels.groups must be an array of strings"),
+        ("[labels]\ngroups = [\"A\", 2]\n", "labels.groups must be an array of strings"),
+        ("[labels]\nassignments = \"12\"\n", "labels.assignments must be an array of integers"),
+        ("[privacy]\nmin_public_cell_count = \"5\"\n", "privacy.min_public_cell_count must be an integer"),
+        ("[survey_dimensions]\nattitude = \"useful_1\"\n", "survey_dimensions.attitude must be an array of strings"),
+        ("[likert_mapping]\nlow = \"5\"\n", "likert_mapping.low must be a number"),
+    ],
+)
+def test_load_quant_config_rejects_malformed_toml_schema(tmp_path: Path, toml_text: str, message: str) -> None:
+    path = tmp_path / "malformed.toml"
+    path.write_text(toml_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_quant_config(path)
