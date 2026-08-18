@@ -34,6 +34,8 @@ uv run python scripts/validate_artifacts.py --mode small --public-output-dir rep
 
 The validator checks mtime staleness, not content hashes.
 
+The quantitative pipeline stages generated public files before publication. If modeling, report generation, or the staged privacy scan fails, rerun after fixing the cause; existing generated public files are preserved until a complete staged run is ready.
+
 ## Broken Public Artifact Contract
 
 Failure: adding/removing a table or figure in generation code without updating schema constants, tests, docs, or validation.

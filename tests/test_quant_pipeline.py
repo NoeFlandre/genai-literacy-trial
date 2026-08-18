@@ -139,3 +139,31 @@ def test_run_quant_analysis_reports_malformed_prompt_rows_before_modeling(tmp_pa
             tmp_path / "private",
             tmp_path / "public",
         )
+
+
+def test_run_quant_analysis_preserves_previous_public_outputs_when_publication_fails(tmp_path, monkeypatch) -> None:
+    input_dir = tmp_path / "input"
+    public_dir = tmp_path / "public"
+    write_synthetic_quant_input(input_dir)
+    public_dir.mkdir()
+    previous_table = public_dir / "table_data_verification.csv"
+    previous_report = public_dir / "quantitative_report.md"
+    previous_table.write_text("previous table\n", encoding="utf-8")
+    previous_report.write_text("previous report\n", encoding="utf-8")
+
+    def fail_report(*args, **kwargs):
+        raise RuntimeError("report publication failed")
+
+    monkeypatch.setattr("genai_literacy_trial.quant_pipeline.write_quantitative_report", fail_report)
+
+    with pytest.raises(RuntimeError, match="report publication failed"):
+        run_quant_analysis(
+            input_dir,
+            Path("config/quant_config.template.toml"),
+            Path("config/expected_inventory.template.toml"),
+            tmp_path / "private",
+            public_dir,
+        )
+
+    assert previous_table.read_text(encoding="utf-8") == "previous table\n"
+    assert previous_report.read_text(encoding="utf-8") == "previous report\n"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Callable, cast
 
 import numpy as np
@@ -140,6 +141,13 @@ def _clean_public_output_dir(public_output_dir: Path) -> None:
             path.unlink()
 
 
+def _publish_staged_public_outputs(staging_dir: Path, public_output_dir: Path) -> None:
+    public_output_dir.mkdir(parents=True, exist_ok=True)
+    _clean_public_output_dir(public_output_dir)
+    for path in staging_dir.iterdir():
+        path.replace(public_output_dir / path.name)
+
+
 def _merge_pre_composites(participant: pd.DataFrame, composites: pd.DataFrame) -> pd.DataFrame:
     pre = composites[composites["phase"] == NORMALIZED_PRE_LABEL].drop(columns=["phase"], errors="ignore")
     pre = pre.drop(columns=["group"], errors="ignore")
@@ -246,23 +254,25 @@ def run_quant_analysis(input_dir: Path, config_path: Path, expected_inventory_pa
         "table_prompt_sensitivity_all4_assignments": sensitivity["all4_assignments"],
     }
 
-    public_output_dir.mkdir(parents=True, exist_ok=True)
-    _clean_public_output_dir(public_output_dir)
+    public_output_dir.parent.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
-    generated: list[str] = []
-    for name in REQUIRED_TABLES:
-        path = public_output_dir / f"{name}.{TABLE_OUTPUT_FORMAT}"
-        tables[name].to_csv(path, index=False)
-        generated.append(path.name)
-    for path in plot_prompt_quality_trajectory(trajectory_means, public_output_dir):
-        generated.append(path.name)
-    for path in plot_learning_outcome(model_based_learning_prediction_table(participant), public_output_dir):
-        generated.append(path.name)
-    for path in plot_calibration_forest(_calibration_forest_source(calibration), public_output_dir):
-        generated.append(path.name)
-    write_quantitative_report(tables, public_output_dir, generated)
-    findings = scan_public_tree(public_output_dir)
-    if findings:
-        details = "; ".join(f"{f.path}:{f.rule}" for f in findings)
-        raise ValueError(f"Privacy audit failed for public outputs: {details}")
+    with TemporaryDirectory(prefix=f".{public_output_dir.name}.staging-", dir=public_output_dir.parent) as staging_path:
+        staging_dir = Path(staging_path)
+        generated: list[str] = []
+        for name in REQUIRED_TABLES:
+            path = staging_dir / f"{name}.{TABLE_OUTPUT_FORMAT}"
+            tables[name].to_csv(path, index=False)
+            generated.append(path.name)
+        for path in plot_prompt_quality_trajectory(trajectory_means, staging_dir):
+            generated.append(path.name)
+        for path in plot_learning_outcome(model_based_learning_prediction_table(participant), staging_dir):
+            generated.append(path.name)
+        for path in plot_calibration_forest(_calibration_forest_source(calibration), staging_dir):
+            generated.append(path.name)
+        write_quantitative_report(tables, staging_dir, generated)
+        findings = scan_public_tree(staging_dir)
+        if findings:
+            details = "; ".join(f"{f.path}:{f.rule}" for f in findings)
+            raise ValueError(f"Privacy audit failed for public outputs: {details}")
+        _publish_staged_public_outputs(staging_dir, public_output_dir)
     return {PUBLIC_OUTPUT_DIR_KEY: public_output_dir, PRIVATE_OUTPUT_DIR_KEY: output_dir}
