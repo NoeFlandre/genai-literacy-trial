@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence, cast
@@ -122,7 +124,26 @@ def write_manifest(
         "outputs": _manifest_entries(outputs),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            temporary_path = Path(stream.name)
+            stream.write(serialized)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _is_sha256(value: object) -> bool:
