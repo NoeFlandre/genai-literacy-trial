@@ -16,7 +16,11 @@ from genai_literacy_trial.paths import (
 )
 from genai_literacy_trial.quant_figures import FIGURE_FORMATS, FIGURE_STEMS
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME
-from genai_literacy_trial.quant_schema import QUANT_TABLE_OUTPUT_FORMAT, REQUIRED_QUANT_TABLES
+from genai_literacy_trial.quant_schema import (
+    QUANT_TABLE_OUTPUT_FORMAT,
+    REQUIRED_QUANT_TABLE_COLUMNS,
+    REQUIRED_QUANT_TABLES,
+)
 
 
 SMALL_INPUT_FILES = ("survey.csv", "grades.csv", "prompts.csv")
@@ -65,7 +69,7 @@ def _validate_source_files(paths: Sequence[Path]) -> list[ValidationIssue]:
     return issues
 
 
-def _validate_csv(path: Path) -> ValidationIssue | None:
+def _validate_csv(path: Path, required_columns: Sequence[str]) -> ValidationIssue | None:
     try:
         table = pd.read_csv(path, nrows=1)
     except pd.errors.EmptyDataError:
@@ -74,6 +78,9 @@ def _validate_csv(path: Path) -> ValidationIssue | None:
         return ValidationIssue("invalid_csv", path, f"CSV could not be read: {exc}")
     if len(table.columns) == 0:
         return ValidationIssue("invalid_csv", path, "CSV has no columns")
+    missing_columns = [column for column in required_columns if column not in table.columns]
+    if missing_columns:
+        return ValidationIssue("invalid_schema", path, f"CSV is missing required columns: {', '.join(missing_columns)}")
     return None
 
 
@@ -103,7 +110,7 @@ def validate_artifacts(
             issues.append(ValidationIssue("empty", path, "required output artifact is empty"))
             continue
         if path.suffix.lower() == ".csv":
-            csv_issue = _validate_csv(path)
+            csv_issue = _validate_csv(path, REQUIRED_QUANT_TABLE_COLUMNS[path.stem])
             if csv_issue is not None:
                 issues.append(csv_issue)
                 continue

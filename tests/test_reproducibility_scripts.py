@@ -93,6 +93,45 @@ def test_validate_artifacts_reports_stale_outputs(tmp_path: Path) -> None:
     assert "quantitative_report.md" in result.stdout
 
 
+def test_validate_artifacts_reports_invalid_quant_table_schema(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    public_output_dir = tmp_path / "public"
+    config = tmp_path / "quant_config.toml"
+    expected_inventory = tmp_path / "expected_inventory.toml"
+    input_dir.mkdir()
+    public_output_dir.mkdir()
+    for name in ("survey.csv", "grades.csv", "prompts.csv"):
+        (input_dir / name).write_text("col\nvalue\n", encoding="utf-8")
+    config.write_text("[columns]\n", encoding="utf-8")
+    expected_inventory.write_text("pre_responses = 1\n", encoding="utf-8")
+
+    for name in REQUIRED_SMALL_OUTPUTS:
+        path = public_output_dir / name
+        if path.suffix == ".csv":
+            path.write_text("col\nvalue\n", encoding="utf-8")
+        else:
+            path.write_bytes(b"artifact")
+
+    result = run_script(
+        "scripts/validate_artifacts.py",
+        "--mode",
+        "small",
+        "--input-dir",
+        str(input_dir),
+        "--config",
+        str(config),
+        "--expected-inventory",
+        str(expected_inventory),
+        "--public-output-dir",
+        str(public_output_dir),
+        "--allow-stale",
+    )
+
+    assert result.returncode == 1
+    assert "invalid_schema" in result.stdout
+    assert "table_data_verification.csv" in result.stdout
+
+
 def test_reproduce_small_generates_and_validates_quant_outputs(tmp_path: Path) -> None:
     public_output_dir = tmp_path / "public"
     private_output_dir = tmp_path / "private"

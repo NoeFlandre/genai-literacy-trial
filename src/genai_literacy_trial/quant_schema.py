@@ -32,6 +32,32 @@ REQUIRED_QUANT_TABLES = (
     "table_prompt_sensitivity_min3_assignments",
     "table_prompt_sensitivity_all4_assignments",
 )
+REQUIRED_QUANT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
+    "table_data_verification": ("metric", "observed", "expected", "status"),
+    "table_missingness_prompt_by_group_assignment": ("group", "assignment", "n", "scored", "missing"),
+    "table_baseline_balance": ("metric", "group", "n"),
+    "table_prompt_trajectory_model": ("model", "term", "estimate", "p_value", "n"),
+    "table_prompt_trajectory_estimated_means": ("group", "assignment", "mean", "ci_low", "ci_high", "n"),
+    "table_participant_training_contrasts": ("contrast", "mean_difference", "hedges_g", "p_value", "n"),
+    "table_participant_training_tests": ("test", "statistic", "p_value"),
+    "table_learning_outcome_models": ("model", "term", "estimate", "p_value", "n"),
+    "table_prompt_grade_correlations": ("metric", "method", "correlation", "p_value", "n"),
+    "table_calibration_models": ("model", "term", "estimate", "p_value", "n"),
+    "table_survey_reliability": ("dimension", "n_items", "cronbach_alpha"),
+    "table_prepost_survey_change": ("dimension", "analysis_type", "pre_mean", "post_mean", "change", "n"),
+    "table_small_sample_sensitivity": (
+        "detectable_d_a_vs_b_80_power",
+        "detectable_d_c_vs_pooled_ab_80_power",
+        "detectable_r_n45_80_power",
+        "interpretation",
+    ),
+    "table_perceived_usefulness_models": ("model", "term", "estimate", "p_value", "n"),
+    "table_complete_case_diagnostics": ("model", "starting_n", "final_n"),
+    "table_prior_use_mapping": ("prior_chatgpt_use", "n", "mapped_score", "mapped_status"),
+    "table_scored_assignment_distribution_by_group": ("group", "scored_assignments", "n"),
+    "table_prompt_sensitivity_min3_assignments": ("model", "status", "n"),
+    "table_prompt_sensitivity_all4_assignments": ("model", "status", "n"),
+}
 
 QuantTableMap = dict[str, pd.DataFrame]
 

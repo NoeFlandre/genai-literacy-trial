@@ -10,6 +10,7 @@ from genai_literacy_trial.quant_schema import (
     PRIVATE_OUTPUT_DIR_KEY,
     PUBLIC_OUTPUT_DIR_KEY,
     QUANT_TABLE_OUTPUT_FORMAT,
+    REQUIRED_QUANT_TABLE_COLUMNS,
     REQUIRED_QUANT_TABLES,
     BootstrapSummary,
     CorrelationResult,
@@ -64,6 +65,11 @@ def test_required_quant_tables_are_public_output_contract() -> None:
 
 def test_quant_table_output_format_is_public_output_contract() -> None:
     assert QUANT_TABLE_OUTPUT_FORMAT == "csv"
+
+
+def test_required_quant_table_column_contract_covers_every_table() -> None:
+    assert set(REQUIRED_QUANT_TABLE_COLUMNS) == set(REQUIRED_QUANT_TABLES)
+    assert all(REQUIRED_QUANT_TABLE_COLUMNS[name] for name in REQUIRED_QUANT_TABLES)
 
 
 def test_quant_table_map_type_alias_is_importable() -> None:

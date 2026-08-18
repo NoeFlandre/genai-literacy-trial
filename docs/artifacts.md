@@ -76,4 +76,4 @@ uv run python scripts/validate_artifacts.py \
   --public-output-dir repro_outputs/small/public
 ```
 
-Validation checks source existence and non-emptiness, required output existence and non-emptiness, CSV readability, and mtime-based staleness. It does not hash file contents or prove statistical validity. The pipeline itself performs input, inventory, and generated-public-output privacy checks.
+Validation checks source existence and non-emptiness, required output existence and non-emptiness, CSV readability, required columns for each quantitative table, and mtime-based staleness. Additional CSV columns are allowed. It does not hash file contents or prove statistical validity. The pipeline itself performs input, inventory, and generated-public-output privacy checks.
