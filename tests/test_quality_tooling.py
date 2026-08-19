@@ -4,7 +4,7 @@ import tomllib
 from pathlib import Path
 
 from scripts.check_crap import MAX_CRAP_SCORE, CrapResult
-from scripts.run_mutation_gate import mutation_failures
+from scripts.run_mutation_gate import MUTATION_PATTERNS, mutation_failures
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -46,3 +46,11 @@ def test_mutation_gate_reports_targeted_survivors_and_unchecked_mutants(tmp_path
             "not checked",
         ),
     ]
+
+
+def test_mutation_gate_selects_publication_regression_tests() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    selected_tests = project["tool"]["mutmut"]["pytest_add_cli_args_test_selection"]
+
+    assert "tests/test_high_risk_contracts.py" in selected_tests
+    assert any("publish_staged_public_outputs" in pattern for pattern in MUTATION_PATTERNS)

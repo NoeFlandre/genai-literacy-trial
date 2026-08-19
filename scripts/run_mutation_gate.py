@@ -13,6 +13,13 @@ MUTATION_PATTERNS = (
     "genai_literacy_trial.quant_preprocess.x_suppress_small_cells*",
     "genai_literacy_trial.quant_stats.x_welch_anova*",
     "genai_literacy_trial.validate_artifacts.x__validate_manifest*",
+    "genai_literacy_trial.quant_pipeline.x__generated_public_output_names*",
+    "genai_literacy_trial.quant_pipeline.x__backup_generated_public_outputs*",
+    "genai_literacy_trial.quant_pipeline.x__remove_stale_generated_outputs*",
+    "genai_literacy_trial.quant_pipeline.x__remove_new_outputs*",
+    "genai_literacy_trial.quant_pipeline.x__restore_original_outputs*",
+    "genai_literacy_trial.quant_pipeline.x__rollback_public_output_publish*",
+    "genai_literacy_trial.quant_pipeline.x__publish_staged_public_outputs*",
 )
 
 MUTATION_STATUS_BY_EXIT_CODE = {

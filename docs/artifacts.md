@@ -66,7 +66,7 @@ clean_private_data/            ignored cleaning workspace
 
 The current quantitative pipeline creates the requested `--output-dir` for local diagnostics but writes the documented public tables, figures, and report to `--public-output-dir`. Do not infer that a private output directory is a complete reproducible snapshot.
 
-Public artifacts are first written to a temporary sibling staging directory and scanned for privacy findings. They are published to `--public-output-dir` only after generation and the staged privacy scan succeed; failures before publication leave existing generated public files in place.
+Public artifacts are first written to a temporary sibling staging directory and scanned for privacy findings. They are published to `--public-output-dir` only after generation and the staged privacy scan succeed. Existing top-level generated files are backed up during publication and restored if a normal replacement or stale-file cleanup error occurs, so a publication exception does not intentionally leave a partial generated set. Unrelated files and nested directories are preserved.
 
 ## Validation and freshness
 

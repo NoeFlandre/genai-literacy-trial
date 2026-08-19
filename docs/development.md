@@ -61,7 +61,7 @@ The focused mutation gate covers input resolution and validation, privacy cell s
 uv run python scripts/run_mutation_gate.py
 ```
 
-The default gate must report zero surviving, untested, or timed-out mutants. Equivalent mutations are excluded explicitly in `[tool.mutmut]`; those exclusions are limited to ordering flags, runtime-only casts, and explicit numeric casts.
+The default gate must report zero surviving, untested, or timed-out mutants. Equivalent mutations are excluded explicitly in `[tool.mutmut]`; those exclusions are limited to ordering flags, runtime-only casts, temporary-directory naming/location defaults, and explicit numeric casts.
 
 The CRAP gate is strict: every measured source function must score **below 6**. The command fails at exactly 6.0, not only above it:
 

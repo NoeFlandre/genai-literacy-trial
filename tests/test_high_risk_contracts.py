@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,7 +9,13 @@ import pytest
 import genai_literacy_trial.quant_models as quant_models
 from genai_literacy_trial.quant_config import QuantConfig
 from genai_literacy_trial.quant_models import fit_prompt_trajectory_model, prepost_survey_change_models
-from genai_literacy_trial.quant_pipeline import _read_input, _validate_quant_input_frames
+from genai_literacy_trial.quant_pipeline import (
+    _generated_public_output_names,
+    _publish_staged_public_outputs,
+    _read_input,
+    _remove_new_outputs,
+    _validate_quant_input_frames,
+)
 from genai_literacy_trial.quant_preprocess import build_participant_table, prepare_retained_survey, suppress_small_cells
 from genai_literacy_trial.quant_stats import hedges_g, welch_anova
 from tests.quant_fixtures import synthetic_quant_frames
@@ -187,6 +195,87 @@ def test_read_input_reports_the_dataset_name_for_empty_compatibility_input(tmp_p
 
     with pytest.raises(ValueError, match="Input dataset grades is empty"):
         _read_input(tmp_path, "grades")
+
+
+def test_generated_public_output_names_accepts_a_missing_directory(tmp_path) -> None:
+    assert _generated_public_output_names(tmp_path / "missing") == set()
+
+
+def test_generated_public_output_names_filters_files_case_insensitively(tmp_path) -> None:
+    public_dir = tmp_path / "public"
+    public_dir.mkdir()
+    (public_dir / "TABLE.CSV").write_text("table\n", encoding="utf-8")
+    (public_dir / "notes.txt").write_text("keep\n", encoding="utf-8")
+    (public_dir / "directory.csv").mkdir()
+
+    assert _generated_public_output_names(public_dir) == {"TABLE.CSV"}
+
+
+def test_publish_staged_public_outputs_creates_missing_parent_directory(tmp_path) -> None:
+    staging_dir = tmp_path / "staging"
+    public_dir = tmp_path / "nested" / "public"
+    staging_dir.mkdir()
+    (staging_dir / "new.csv").write_text("new table\n", encoding="utf-8")
+
+    _publish_staged_public_outputs(staging_dir, public_dir)
+
+    assert (public_dir / "new.csv").read_text(encoding="utf-8") == "new table\n"
+
+
+def test_publish_staged_public_outputs_removes_stale_generated_files(tmp_path) -> None:
+    public_dir = tmp_path / "public"
+    staging_dir = tmp_path / "staging"
+    public_dir.mkdir()
+    staging_dir.mkdir()
+    (public_dir / "stale.csv").write_text("stale\n", encoding="utf-8")
+    (staging_dir / "new.csv").write_text("new\n", encoding="utf-8")
+
+    _publish_staged_public_outputs(staging_dir, public_dir)
+
+    assert not (public_dir / "stale.csv").exists()
+    assert (public_dir / "new.csv").exists()
+
+
+def test_remove_new_outputs_tolerates_a_missing_published_file(tmp_path) -> None:
+    _remove_new_outputs(tmp_path, set(), ["missing.csv"])
+
+
+def test_publish_staged_public_outputs_rolls_back_after_mid_publish_failure(tmp_path, monkeypatch) -> None:
+    public_dir = tmp_path / "public"
+    staging_dir = tmp_path / "staging"
+    public_dir.mkdir()
+    staging_dir.mkdir()
+    (public_dir / "old.csv").write_text("previous table\n", encoding="utf-8")
+    (public_dir / "old.md").write_text("previous report\n", encoding="utf-8")
+    (public_dir / "notes.txt").write_text("keep this note\n", encoding="utf-8")
+    (public_dir / "nested").mkdir()
+    (public_dir / "nested" / "old.png").write_text("keep this nested file\n", encoding="utf-8")
+    (staging_dir / "new.csv").write_text("new table\n", encoding="utf-8")
+    (staging_dir / "new.md").write_text("new report\n", encoding="utf-8")
+
+    real_replace = Path.replace
+    publish_replacements = 0
+
+    def fail_on_second_publish(source: Path, target: Path) -> Path:
+        nonlocal publish_replacements
+        if target.parent == public_dir:
+            publish_replacements += 1
+            if publish_replacements == 2:
+                raise OSError("simulated artifact publish failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", fail_on_second_publish)
+
+    with pytest.raises(OSError, match="simulated artifact publish failure"):
+        _publish_staged_public_outputs(staging_dir, public_dir)
+
+    assert publish_replacements == 2
+    assert (public_dir / "old.csv").read_text(encoding="utf-8") == "previous table\n"
+    assert (public_dir / "old.md").read_text(encoding="utf-8") == "previous report\n"
+    assert not (public_dir / "new.csv").exists()
+    assert not (public_dir / "new.md").exists()
+    assert (public_dir / "notes.txt").read_text(encoding="utf-8") == "keep this note\n"
+    assert (public_dir / "nested" / "old.png").exists()
 
 
 def test_read_input_prefers_a_primary_file_and_rejects_multiple_primary_formats(tmp_path) -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 from tempfile import TemporaryDirectory
 from typing import Callable, cast
 
@@ -202,20 +203,62 @@ def _validate_quant_input_frames(survey: pd.DataFrame, grades: pd.DataFrame, pro
         raise ValueError("Invalid quantitative inputs: " + "; ".join(issues))
 
 
-def _clean_public_output_dir(public_output_dir: Path) -> None:
-    """Delete previous generated-style public outputs before writing a fresh run."""
+def _generated_public_output_names(public_output_dir: Path) -> set[str]:
     if not public_output_dir.exists():
-        return
-    for path in public_output_dir.iterdir():
-        if path.is_file() and path.suffix.lower() in GENERATED_PUBLIC_SUFFIXES:
-            path.unlink()
+        return set()
+    return {
+        path.name
+        for path in public_output_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in GENERATED_PUBLIC_SUFFIXES
+    }
+
+
+def _backup_generated_public_outputs(public_output_dir: Path, backup_dir: Path) -> set[str]:
+    names = _generated_public_output_names(public_output_dir)
+    for name in names:
+        shutil.copy2(public_output_dir / name, backup_dir / name)
+    return names
+
+
+def _remove_stale_generated_outputs(public_output_dir: Path, original_names: set[str], staged_names: set[str]) -> None:
+    for name in original_names - staged_names:
+        (public_output_dir / name).unlink()
+
+
+def _remove_new_outputs(public_output_dir: Path, original_names: set[str], published_names: list[str]) -> None:
+    for name in published_names:
+        if name not in original_names:
+            (public_output_dir / name).unlink(missing_ok=True)
+
+
+def _restore_original_outputs(public_output_dir: Path, backup_dir: Path, original_names: set[str]) -> None:
+    for name in original_names:
+        shutil.copy2(backup_dir / name, public_output_dir / name)
+
+
+def _rollback_public_output_publish(
+    public_output_dir: Path, backup_dir: Path, original_names: set[str], published_names: list[str]
+) -> None:
+    _remove_new_outputs(public_output_dir, original_names, published_names)
+    _restore_original_outputs(public_output_dir, backup_dir, original_names)
 
 
 def _publish_staged_public_outputs(staging_dir: Path, public_output_dir: Path) -> None:
     public_output_dir.mkdir(parents=True, exist_ok=True)
-    _clean_public_output_dir(public_output_dir)
-    for path in staging_dir.iterdir():
-        path.replace(public_output_dir / path.name)
+    staged_paths = tuple(staging_dir.iterdir())
+    staged_names = {path.name for path in staged_paths}
+    with TemporaryDirectory(prefix=f".{public_output_dir.name}.backup-", dir=public_output_dir.parent) as backup_path:
+        backup_dir = Path(backup_path)
+        original_names = _backup_generated_public_outputs(public_output_dir, backup_dir)
+        published_names: list[str] = []
+        try:
+            for path in staged_paths:
+                path.replace(public_output_dir / path.name)
+                published_names.append(path.name)
+            _remove_stale_generated_outputs(public_output_dir, original_names, staged_names)
+        except Exception:
+            _rollback_public_output_publish(public_output_dir, backup_dir, original_names, published_names)
+            raise
 
 
 def _merge_pre_composites(participant: pd.DataFrame, composites: pd.DataFrame) -> pd.DataFrame:

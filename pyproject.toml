@@ -55,7 +55,8 @@ source_paths = [
 also_copy = ["config/", "src/genai_literacy_trial/"]
 mutate_only_covered_lines = true
 # These patterns exclude equivalent mutations only: they alter ordering,
-# runtime-only casts, or explicit numeric casts without changing valid outputs.
+# runtime-only casts, temporary-directory naming/location defaults, or explicit
+# numeric casts without changing valid outputs.
 do_not_mutate_patterns = [
   'nonfinite_assignment.*astype\(float\)',
   'noninteger_assignment.*astype\(float\)',
@@ -67,6 +68,7 @@ do_not_mutate_patterns = [
   'path\.read_text\(encoding="utf-8"\)',
   'cast\(dict\[str, object\], recorded_value\)',
   'zip\(group_cols, keys, strict=True\)',
+  'TemporaryDirectory\(prefix=.*backup-.*dir=public_output_dir\.parent.*\)',
 ]
 pytest_add_cli_args_test_selection = [
   "tests/test_high_risk_contracts.py",
