@@ -24,3 +24,7 @@ privacy_patterns.local.yml
 htmlcov/
 .coverage
 repro_outputs/
+mutants/
+
+# Local reviewer feedback and editorial correspondence.
+reviewer_feedback/

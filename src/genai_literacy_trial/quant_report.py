@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 
@@ -69,6 +70,58 @@ def _fmt(value: object, digits: int = 3) -> str:
     return str(value)
 
 
+def _manuscript_base_paragraph(verification: pd.DataFrame) -> str:
+    retained = _first_row(verification, metric="retained_participants")
+    survey_rows = _first_row(verification, metric="retained_survey_rows")
+    prompt_rows = _first_row(verification, metric="scored_prompt_observations")
+    return (
+        "The quantitative pipeline retained "
+        f"{_fmt(retained['observed'], 0) if retained is not None else 'NA'} participants and "
+        f"{_fmt(survey_rows['observed'], 0) if survey_rows is not None else 'NA'} paired survey rows. "
+        f"Prompt analyses used {_fmt(prompt_rows['observed'], 0) if prompt_rows is not None else 'NA'} scored assignment observations for assignment-level models. "
+        "Prompt-grade relationships were evaluated at the participant level, and the old duplicated n=90 prompt-grade p-values were not used."
+    )
+
+
+def _contrast_paragraph(row: pd.Series) -> str:
+    return (
+        "At the participant level, mean prompt quality was higher for Group C than pooled Groups A and B "
+        f"(mean difference={_fmt(row['mean_difference'])}, Hedges g={_fmt(row['hedges_g'])}, "
+        f"95% CI for g [{_fmt(row['hedges_g_ci_low'])}, {_fmt(row['hedges_g_ci_high'])}], n={_fmt(row['n'], 0)})."
+    )
+
+
+def _correlation_paragraph(row: pd.Series) -> str:
+    corr_value = row["correlation"] if "correlation" in row.index else row.get("estimate")
+    return (
+        "Mean prompt quality was descriptively compared with midterm grade as the early-course academic performance measure "
+        f"(Pearson r={_fmt(corr_value)}, 95% CI [{_fmt(row['ci_low'])}, {_fmt(row['ci_high'])}], "
+        f"p={_fmt(row['p_value'])}, n={_fmt(row['n'], 0)})."
+    )
+
+
+def _model_paragraph(row: pd.Series) -> str:
+    if {"estimate", "ci_low", "ci_high", "p_value", "n"} <= set(row.index):
+        return (
+            "In the adjusted model requested for academic predictors of prompt quality, mean prompt quality was predicted from midterm grade, section, and prior ChatGPT use "
+            f"(midterm coefficient={_fmt(row['estimate'])}, 95% CI [{_fmt(row['ci_low'])}, {_fmt(row['ci_high'])}], "
+            f"p={_fmt(row['p_value'])}, n={_fmt(row['n'], 0)})."
+        )
+    return "The adjusted model requested for academic predictors of prompt quality used mean prompt quality as the outcome, with midterm grade, section, and prior ChatGPT use as predictors."
+
+
+def _sensitivity_paragraph(row: pd.Series) -> str:
+    return (
+        "Small-sample sensitivity indicates that the study is powered only for relatively large effects "
+        f"(approximate 80% detectable d for A vs B={_fmt(row['detectable_d_a_vs_b_80_power'])})."
+    )
+
+
+def _append_optional_paragraph(lines: list[str], row: pd.Series | None, builder: Callable[[pd.Series], str]) -> None:
+    if row is not None:
+        lines.append(builder(row))
+
+
 def _manuscript_paragraphs(tables: QuantTableMap) -> list[str]:
     verification = tables.get("table_data_verification", pd.DataFrame())
     contrasts = tables.get("table_participant_training_contrasts", pd.DataFrame())
@@ -76,58 +129,98 @@ def _manuscript_paragraphs(tables: QuantTableMap) -> list[str]:
     learning_models = tables.get("table_learning_outcome_models", pd.DataFrame())
     sensitivity = tables.get("table_small_sample_sensitivity", pd.DataFrame())
 
-    retained = _first_row(verification, metric="retained_participants")
-    survey_rows = _first_row(verification, metric="retained_survey_rows")
-    prompt_rows = _first_row(verification, metric="scored_prompt_observations")
     c_pooled = _first_row(contrasts, contrast="C vs pooled A+B")
     midterm_corr = _first_row(corr, metric="mean_prompt_score vs midterm_points", method="pearson")
     midterm_model = _first_row(learning_models, model="prompt_quality_academic_predictors", term="midterm_points")
-    detect_d = None if sensitivity.empty else sensitivity.iloc[0]
+    detect_d = sensitivity.iloc[0] if not sensitivity.empty else None
 
-    lines = [
-        "The quantitative pipeline retained "
-        f"{_fmt(retained['observed'], 0) if retained is not None else 'NA'} participants and "
-        f"{_fmt(survey_rows['observed'], 0) if survey_rows is not None else 'NA'} paired survey rows. "
-        f"Prompt analyses used {_fmt(prompt_rows['observed'], 0) if prompt_rows is not None else 'NA'} scored assignment observations for assignment-level models. "
-        "Prompt-grade relationships were evaluated at the participant level, and the old duplicated n=90 prompt-grade p-values were not used.",
-    ]
-    if c_pooled is not None:
-        lines.append(
-            "At the participant level, mean prompt quality was higher for Group C than pooled Groups A and B "
-            f"(mean difference={_fmt(c_pooled['mean_difference'])}, Hedges g={_fmt(c_pooled['hedges_g'])}, "
-            f"95% CI for g [{_fmt(c_pooled['hedges_g_ci_low'])}, {_fmt(c_pooled['hedges_g_ci_high'])}], n={_fmt(c_pooled['n'], 0)})."
-        )
-    if midterm_corr is not None:
-        corr_value = midterm_corr["correlation"] if "correlation" in midterm_corr.index else midterm_corr.get("estimate")
-        lines.append(
-            "Mean prompt quality was descriptively compared with midterm grade as the early-course academic performance measure "
-            f"(Pearson r={_fmt(corr_value)}, 95% CI [{_fmt(midterm_corr['ci_low'])}, {_fmt(midterm_corr['ci_high'])}], "
-            f"p={_fmt(midterm_corr['p_value'])}, n={_fmt(midterm_corr['n'], 0)})."
-        )
-    if midterm_model is not None:
-        if {"estimate", "ci_low", "ci_high", "p_value", "n"} <= set(midterm_model.index):
-            lines.append(
-                "In the adjusted model requested for academic predictors of prompt quality, mean prompt quality was predicted from midterm grade, section, and prior ChatGPT use "
-                f"(midterm coefficient={_fmt(midterm_model['estimate'])}, 95% CI [{_fmt(midterm_model['ci_low'])}, {_fmt(midterm_model['ci_high'])}], "
-                f"p={_fmt(midterm_model['p_value'])}, n={_fmt(midterm_model['n'], 0)})."
-            )
-        else:
-            lines.append(
-                "The adjusted model requested for academic predictors of prompt quality used mean prompt quality as the outcome, with midterm grade, section, and prior ChatGPT use as predictors."
-            )
-    if detect_d is not None:
-        lines.append(
-            "Small-sample sensitivity indicates that the study is powered only for relatively large effects "
-            f"(approximate 80% detectable d for A vs B={_fmt(detect_d['detectable_d_a_vs_b_80_power'])})."
-        )
+    lines = [_manuscript_base_paragraph(verification)]
+    _append_optional_paragraph(lines, c_pooled, _contrast_paragraph)
+    _append_optional_paragraph(lines, midterm_corr, _correlation_paragraph)
+    _append_optional_paragraph(lines, midterm_model, _model_paragraph)
+    _append_optional_paragraph(lines, detect_d, _sensitivity_paragraph)
     return lines
+
+
+def _learning_section_lines(tables: QuantTableMap) -> list[str]:
+    corr = tables.get("table_prompt_grade_correlations", pd.DataFrame())
+    learning_models = tables.get("table_learning_outcome_models", pd.DataFrame())
+    diagnostics = tables.get("table_complete_case_diagnostics", pd.DataFrame())
+    if not diagnostics.empty and "model" in diagnostics.columns:
+        diagnostics = diagnostics[diagnostics["model"] == "prompt_quality_academic_predictors"]
+    prior_mapping = tables.get("table_prior_use_mapping", pd.DataFrame())
+    return [
+        _md_table(corr),
+        "",
+        "Adjusted prompt-quality predictor model; outcome is mean prompt quality and predictors are midterm grade, section/training condition, and prior ChatGPT use:",
+        "",
+        _md_table(learning_models),
+        "",
+        "Complete-case diagnostics for the adjusted prompt-quality predictor model; loss columns are marginal and non-additive:",
+        "",
+        _md_table(diagnostics),
+        "",
+        "Prior ChatGPT-use coding:",
+        "",
+        _md_table(prior_mapping),
+        "",
+    ]
+
+
+def _participant_robustness_section_lines(tables: QuantTableMap) -> list[str]:
+    return [
+        _md_table(tables.get("table_participant_training_contrasts", pd.DataFrame())),
+        "",
+        "Omnibus training-effect tests:",
+        "",
+        _md_table(tables.get("table_participant_training_tests", pd.DataFrame())),
+        "",
+        "Scored assignment distribution by group:",
+        "",
+        _md_table(tables.get("table_scored_assignment_distribution_by_group", pd.DataFrame())),
+        "",
+        "Missing-prompt sensitivity, at least three scored assignments:",
+        "",
+        _md_table(tables.get("table_prompt_sensitivity_min3_assignments", pd.DataFrame())),
+        "",
+        "Missing-prompt sensitivity, all four scored assignments:",
+        "",
+        _md_table(tables.get("table_prompt_sensitivity_all4_assignments", pd.DataFrame())),
+        "",
+    ]
+
+
+def _calibration_section_lines(tables: QuantTableMap) -> list[str]:
+    return [
+        "Survey reliability:",
+        "",
+        _md_table(tables.get("table_survey_reliability", pd.DataFrame())),
+        "",
+        _md_table(tables.get("table_calibration_models", pd.DataFrame())),
+        "",
+    ]
+
+
+def _generic_section_lines(section: str, tables: QuantTableMap) -> list[str]:
+    return [_md_table(tables.get(REPORT_SECTION_TABLES.get(section, ""), pd.DataFrame())), ""]
+
+
+def _section_lines(section: str, tables: QuantTableMap, generated_file_list: list[str]) -> list[str]:
+    handlers: dict[str, Callable[[], list[str]]] = {
+        "Learning Outcomes": lambda: _learning_section_lines(tables),
+        "Participant-Level Robustness": lambda: _participant_robustness_section_lines(tables),
+        "Calibration: Beliefs vs Actual Prompt Skill": lambda: _calibration_section_lines(tables),
+        "Files Generated": lambda: ["\n".join(f"- `{name}`" for name in generated_file_list), ""],
+        "Privacy Verification": lambda: ["No raw identifiers, participant-level rows, raw survey responses, individual grades, or raw transcripts were written to public outputs.", ""],
+        "Manuscript-Ready Quantitative Paragraphs": lambda: _manuscript_paragraphs(tables) + [""],
+    }
+    return [f"## {section}", "", *handlers.get(section, lambda: _generic_section_lines(section, tables))()]
 
 
 def write_quantitative_report(tables: QuantTableMap, output_dir: Path, generated_files: list[str]) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     generated_file_list = list(dict.fromkeys([*generated_files, QUANTITATIVE_REPORT_FILENAME]))
     verification = tables.get("table_data_verification", pd.DataFrame())
-    corr = tables.get("table_prompt_grade_correlations", pd.DataFrame())
     lines = ["# Quantitative Report", ""]
     lines += ["## Executive Summary", ""]
     lines += [
@@ -141,42 +234,7 @@ def write_quantitative_report(tables: QuantTableMap, output_dir: Path, generated
     lines += ["## Data Verification", "", _md_table(verification), ""]
     lines += ["## Unit-of-Analysis Audit", "", "participant-level analyses use one row per participant; old n=90 prompt-grade p-values are not used.", ""]
     for section in REQUIRED_SECTIONS[3:]:
-        lines += [f"## {section}", ""]
-        if section == "Learning Outcomes":
-            lines += [_md_table(corr), ""]
-            learning_models = tables.get("table_learning_outcome_models", pd.DataFrame())
-            lines += [
-                "Adjusted prompt-quality predictor model; outcome is mean prompt quality and predictors are midterm grade, section/training condition, and prior ChatGPT use:",
-                "",
-                _md_table(learning_models),
-                "",
-            ]
-            diagnostics = tables.get("table_complete_case_diagnostics", pd.DataFrame())
-            if not diagnostics.empty and "model" in diagnostics.columns:
-                diagnostics = diagnostics[diagnostics["model"] == "prompt_quality_academic_predictors"]
-            lines += ["Complete-case diagnostics for the adjusted prompt-quality predictor model; loss columns are marginal and non-additive:", "", _md_table(diagnostics), ""]
-            prior_mapping = tables.get("table_prior_use_mapping", pd.DataFrame())
-            lines += ["Prior ChatGPT-use coding:", "", _md_table(prior_mapping), ""]
-        elif section == "Participant-Level Robustness":
-            contrasts = tables.get("table_participant_training_contrasts", pd.DataFrame())
-            tests = tables.get("table_participant_training_tests", pd.DataFrame())
-            min3 = tables.get("table_prompt_sensitivity_min3_assignments", pd.DataFrame())
-            all4 = tables.get("table_prompt_sensitivity_all4_assignments", pd.DataFrame())
-            scored = tables.get("table_scored_assignment_distribution_by_group", pd.DataFrame())
-            lines += [_md_table(contrasts), "", "Omnibus training-effect tests:", "", _md_table(tests), "", "Scored assignment distribution by group:", "", _md_table(scored), "", "Missing-prompt sensitivity, at least three scored assignments:", "", _md_table(min3), "", "Missing-prompt sensitivity, all four scored assignments:", "", _md_table(all4), ""]
-        elif section == "Calibration: Beliefs vs Actual Prompt Skill":
-            reliability = tables.get("table_survey_reliability", pd.DataFrame())
-            calibration = tables.get("table_calibration_models", pd.DataFrame())
-            lines += ["Survey reliability:", "", _md_table(reliability), "", _md_table(calibration), ""]
-        elif section == "Files Generated":
-            lines += ["\n".join(f"- `{name}`" for name in generated_file_list), ""]
-        elif section == "Privacy Verification":
-            lines += ["No raw identifiers, participant-level rows, raw survey responses, individual grades, or raw transcripts were written to public outputs.", ""]
-        elif section == "Manuscript-Ready Quantitative Paragraphs":
-            lines += _manuscript_paragraphs(tables) + [""]
-        else:
-            table = tables.get(REPORT_SECTION_TABLES.get(section, ""), pd.DataFrame())
-            lines += [_md_table(table), ""]
+        lines += _section_lines(section, tables, generated_file_list)
     path = output_dir / QUANTITATIVE_REPORT_FILENAME
     path.write_text("\n".join(lines), encoding="utf-8")
     return path

@@ -26,8 +26,11 @@ genai-literacy-check-repo-hygiene = "genai_literacy_trial.repo_hygiene:main"
 
 [dependency-groups]
 dev = [
+  "coverage>=7.6",
   "mkdocs-material>=9.6",
+  "mutmut>=3.7.0",
   "pytest>=8.2",
+  "radon>=6.0.1",
   "ruff>=0.15.15",
   "ty>=0.0.72",
 ]
@@ -39,6 +42,40 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.mutmut]
+source_paths = [
+  "src/genai_literacy_trial/quant_config.py",
+  "src/genai_literacy_trial/quant_models.py",
+  "src/genai_literacy_trial/quant_pipeline.py",
+  "src/genai_literacy_trial/quant_preprocess.py",
+  "src/genai_literacy_trial/quant_stats.py",
+  "src/genai_literacy_trial/validate_artifacts.py",
+]
+also_copy = ["config/", "src/genai_literacy_trial/"]
+mutate_only_covered_lines = true
+# These patterns exclude equivalent mutations only: they alter ordering,
+# runtime-only casts, or explicit numeric casts without changing valid outputs.
+do_not_mutate_patterns = [
+  'nonfinite_assignment.*astype\(float\)',
+  'noninteger_assignment.*astype\(float\)',
+  'nonfinite_prompt_score.*astype\(float\)',
+  'groupby\(group_cols, dropna=False, sort=True\)',
+  'groupby\(group_col, sort=True\)',
+  'np\.array\(\[len\(g\) for g in groups\], dtype=float\)',
+  'if np\.any\(ns < 2\):',
+  'path\.read_text\(encoding="utf-8"\)',
+  'cast\(dict\[str, object\], recorded_value\)',
+  'zip\(group_cols, keys, strict=True\)',
+]
+pytest_add_cli_args_test_selection = [
+  "tests/test_high_risk_contracts.py",
+  "tests/test_quant_config.py",
+  "tests/test_quant_models.py",
+  "tests/test_quant_preprocess.py",
+  "tests/test_quant_stats.py",
+  "tests/test_validate_artifacts.py",
+]
 
 [tool.ruff]
 target-version = "py311"

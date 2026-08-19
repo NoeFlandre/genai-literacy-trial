@@ -82,11 +82,10 @@ def mean_prompt_scores(prompts: pd.DataFrame) -> pd.DataFrame:
 
 
 def optional_locus_control_before(survey: pd.DataFrame, prompt_scores: pd.DataFrame) -> dict[str, float]:
-    if "Phase" not in survey.columns:
+    if "Phase" not in survey.columns or not set(LOCUS_OF_CONTROL_COLUMNS) <= set(survey.columns):
         return {}
-    if not set(LOCUS_OF_CONTROL_COLUMNS) <= set(survey.columns):
-        return {}
-    before = survey[survey["Phase"] == "Before"].copy()
+
+    before = survey.loc[survey["Phase"] == "Before"].copy()
     for column in LOCUS_OF_CONTROL_COLUMNS:
         before[column] = before[column].map(LIKERT_POINTS)
     before["locus_of_control"] = before[LOCUS_OF_CONTROL_COLUMNS].mean(axis=1)
@@ -108,15 +107,41 @@ def pearson_stat(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray) -> dict[s
 
 
 def anova_by_group(data: pd.DataFrame, *, value: str, group: str) -> dict[str, float]:
-    groups = [
-        series.dropna().to_numpy()
-        for _, series in data[[group, value]].dropna().groupby(group, sort=True)[value]
-    ]
-    groups = [values for values in groups if len(values) > 0]
+    groups = _anova_groups(data, value=value, group=group)
     if len(groups) < 2 or all(len(values) < 2 for values in groups):
         return {"statistic": np.nan, "p_value": np.nan, "groups": float(len(groups))}
     statistic, p_value = stats.f_oneway(*groups)
     return {"statistic": float(statistic), "p_value": float(p_value), "groups": float(len(groups))}
+
+
+def _anova_groups(data: pd.DataFrame, *, value: str, group: str) -> list[np.ndarray]:
+    return [
+        series.dropna().to_numpy()
+        for _, series in data[[group, value]].dropna().groupby(group, sort=True)[value]
+    ]
+
+
+def _paper_statistic_values(merged: pd.DataFrame) -> dict[str, float]:
+    section_midterm = anova_by_group(merged, value="midterm_points", group="Group")
+    section_final = anova_by_group(merged, value="final_points", group="Group")
+    prompt_training = anova_by_group(merged, value="mean_prompt_score", group="Group")
+    prompt_midterm = pearson_stat(merged["mean_prompt_score"], merged["midterm_points"])
+    prompt_final = pearson_stat(merged["mean_prompt_score"], merged["final_points"])
+    return {
+        "section_midterm_anova_p": section_midterm["p_value"],
+        "section_final_anova_p": section_final["p_value"],
+        "prompt_training_anova_p": prompt_training["p_value"],
+        "prompt_score_grade_midterm_r": prompt_midterm["correlation"],
+        "prompt_score_grade_midterm_p": prompt_midterm["p_value"],
+        "prompt_score_grade_midterm_n": prompt_midterm["n"],
+        "prompt_score_grade_final_r": prompt_final["correlation"],
+        "prompt_score_grade_final_p": prompt_final["p_value"],
+        "prompt_score_grade_final_n": prompt_final["n"],
+    }
+
+
+def _paper_group_means(merged: pd.DataFrame) -> dict[str, float]:
+    return {f"prompt_mean_group_{group}": float(value) for group, value in merged.groupby("Group")["mean_prompt_score"].mean().items()}
 
 
 def build_paper_aggregates(
@@ -187,27 +212,11 @@ def paper_observed_statistics(
     merged: pd.DataFrame,
     locus_control: Mapping[str, float] | None = None,
 ) -> pd.DataFrame:
-    section_midterm = anova_by_group(merged, value="midterm_points", group="Group")
-    section_final = anova_by_group(merged, value="final_points", group="Group")
-    prompt_training = anova_by_group(merged, value="mean_prompt_score", group="Group")
-    prompt_midterm = pearson_stat(merged["mean_prompt_score"], merged["midterm_points"])
-    prompt_final = pearson_stat(merged["mean_prompt_score"], merged["final_points"])
-    means = merged.groupby("Group")["mean_prompt_score"].mean()
-
     observed: dict[str, float] = {
         **{key: float(value) for key, value in sample_summary.items()},
-        "section_midterm_anova_p": section_midterm["p_value"],
-        "section_final_anova_p": section_final["p_value"],
-        "prompt_training_anova_p": prompt_training["p_value"],
-        "prompt_score_grade_midterm_r": prompt_midterm["correlation"],
-        "prompt_score_grade_midterm_p": prompt_midterm["p_value"],
-        "prompt_score_grade_midterm_n": prompt_midterm["n"],
-        "prompt_score_grade_final_r": prompt_final["correlation"],
-        "prompt_score_grade_final_p": prompt_final["p_value"],
-        "prompt_score_grade_final_n": prompt_final["n"],
+        **_paper_statistic_values(merged),
     }
-    for group, value in means.items():
-        observed[f"prompt_mean_group_{group}"] = float(value)
+    observed.update(_paper_group_means(merged))
     if locus_control:
         observed.update({key: float(value) for key, value in locus_control.items()})
     return pd.DataFrame([{"metric": key, "observed": value} for key, value in observed.items()])
@@ -239,17 +248,29 @@ def load_csv_inputs(input_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Dat
 
 
 def observed_metrics_from_outputs(outputs: Mapping[str, pd.DataFrame]) -> dict[str, float]:
-    observed: dict[str, float] = {}
     paper_statistics = outputs.get("paper_statistics")
-    if paper_statistics is not None and {"metric", "observed"} <= set(paper_statistics.columns):
-        return {
-            str(row["metric"]): float(row["observed"])
-            for _, row in paper_statistics.dropna(subset=["observed"]).iterrows()
-        }
+    paper_metrics = _paper_metrics(paper_statistics)
+    if paper_metrics is not None:
+        return paper_metrics
     sample = outputs.get("sample_summary")
-    if sample is not None and not sample.empty:
-        for column in sample.columns:
-            value = sample[column].iloc[0]
-            if pd.notna(value):
-                observed[column] = float(value)
+    return _sample_metrics(sample)
+
+
+def _paper_metrics(paper_statistics: pd.DataFrame | None) -> dict[str, float] | None:
+    if paper_statistics is None or not {"metric", "observed"} <= set(paper_statistics.columns):
+        return None
+    return {
+        str(row["metric"]): float(row["observed"])
+        for _, row in paper_statistics.dropna(subset=["observed"]).iterrows()
+    }
+
+
+def _sample_metrics(sample: pd.DataFrame | None) -> dict[str, float]:
+    if sample is None or sample.empty:
+        return {}
+    observed: dict[str, float] = {}
+    for column in sample.columns:
+        value = sample[column].iloc[0]
+        if pd.notna(value):
+            observed[column] = float(value)
     return observed

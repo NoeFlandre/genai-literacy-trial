@@ -68,18 +68,17 @@ class PrivacyFinding:
     evidence: str
 
 
+def _is_public_file(path: Path, root: Path) -> bool:
+    if not path.is_file():
+        return False
+    relative_parts = path.relative_to(root).parts
+    if any(part in SKIPPED_DIRS for part in relative_parts):
+        return False
+    return path.name != LOCAL_PATTERN_FILENAME
+
+
 def iter_public_files(root: Path) -> list[Path]:
-    files: list[Path] = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
-        relative_parts = path.relative_to(root).parts
-        if any(part in SKIPPED_DIRS for part in relative_parts):
-            continue
-        if path.name == LOCAL_PATTERN_FILENAME:
-            continue
-        files.append(path)
-    return files
+    return [path for path in sorted(root.rglob("*")) if _is_public_file(path, root)]
 
 
 def load_local_patterns(path: Path) -> list[str]:
@@ -88,17 +87,26 @@ def load_local_patterns(path: Path) -> list[str]:
     patterns: list[str] = []
     in_patterns = False
     for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line == "patterns:":
-            in_patterns = True
-            continue
-        if in_patterns and line.startswith("- "):
-            pattern = line[2:].strip().strip("'\"")
-            if pattern:
-                patterns.append(pattern)
+        in_patterns, pattern = _parse_local_pattern_line(raw_line, in_patterns)
+        if pattern is not None:
+            patterns.append(pattern)
     return patterns
+
+
+def _parse_local_pattern_line(raw_line: str, in_patterns: bool) -> tuple[bool, str | None]:
+    line = raw_line.strip()
+    if not line or line.startswith("#"):
+        return in_patterns, None
+    return _parse_nonempty_pattern_line(line, in_patterns)
+
+
+def _parse_nonempty_pattern_line(line: str, in_patterns: bool) -> tuple[bool, str | None]:
+    if line == "patterns:":
+        return True, None
+    if not in_patterns or not line.startswith("- "):
+        return in_patterns, None
+    pattern = line[2:].strip().strip("'\"")
+    return in_patterns, pattern or None
 
 
 def _read_text_if_supported(path: Path) -> str:
@@ -115,16 +123,36 @@ def _normalise_local_pattern_text(value: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip().lower()
 
 
+def _path_pattern_findings(path: Path, relative: Path, local_patterns: list[str]) -> list[PrivacyFinding]:
+    findings: list[PrivacyFinding] = []
+    relative_path = _normalise_local_pattern_text(relative.as_posix())
+    for pattern in local_patterns:
+        if _normalise_local_pattern_text(pattern) in relative_path:
+            findings.append(PrivacyFinding(path=relative, rule=RULE_LOCAL_PATTERN, evidence=pattern[:80]))
+            break
+    return findings
+
+
+def _text_rule_findings(relative: Path, text: str) -> list[PrivacyFinding]:
+    findings: list[PrivacyFinding] = []
+    for rule, regex in PRIVACY_TEXT_RULES:
+        match = regex.search(text)
+        if match:
+            findings.append(PrivacyFinding(path=relative, rule=rule, evidence=match.group(0)[:80]))
+    return findings
+
+
+def _local_text_findings(relative: Path, text: str, local_patterns: list[str]) -> list[PrivacyFinding]:
+    lower_text = text.lower()
+    for pattern in local_patterns:
+        if pattern.lower() in lower_text:
+            return [PrivacyFinding(path=relative, rule=RULE_LOCAL_PATTERN, evidence=pattern[:80])]
+    return []
+
+
 def scan_file(path: Path, *, root: Path, local_patterns: list[str]) -> list[PrivacyFinding]:
     relative = path.relative_to(root)
-    findings: list[PrivacyFinding] = []
-
-    if local_patterns:
-        relative_path = _normalise_local_pattern_text(relative.as_posix())
-        for pattern in local_patterns:
-            if _normalise_local_pattern_text(pattern) in relative_path:
-                findings.append(PrivacyFinding(path=relative, rule=RULE_LOCAL_PATTERN, evidence=pattern[:80]))
-                break
+    findings = _path_pattern_findings(path, relative, local_patterns) if local_patterns else []
 
     if path.suffix.lower() in DEFAULT_DENIED_SUFFIXES:
         findings.append(PrivacyFinding(path=relative, rule=RULE_DENIED_SUFFIX, evidence=path.suffix.lower()))
@@ -134,16 +162,8 @@ def scan_file(path: Path, *, root: Path, local_patterns: list[str]) -> list[Priv
     if not text:
         return findings
 
-    for rule, regex in PRIVACY_TEXT_RULES:
-        match = regex.search(text)
-        if match:
-            findings.append(PrivacyFinding(path=relative, rule=rule, evidence=match.group(0)[:80]))
-
-    lower_text = text.lower()
-    for pattern in local_patterns:
-        if pattern.lower() in lower_text:
-            findings.append(PrivacyFinding(path=relative, rule=RULE_LOCAL_PATTERN, evidence=pattern[:80]))
-            break
+    findings.extend(_text_rule_findings(relative, text))
+    findings.extend(_local_text_findings(relative, text, local_patterns))
     return findings
 
 

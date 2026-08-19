@@ -76,19 +76,30 @@ def _validate_source_files(paths: Sequence[Path]) -> list[ValidationIssue]:
     return issues
 
 
-def _validate_csv(path: Path, required_columns: Sequence[str]) -> ValidationIssue | None:
+def _read_csv_header(path: Path) -> pd.Index | ValidationIssue:
     try:
         table = pd.read_csv(path, nrows=1)
     except pd.errors.EmptyDataError:
         return ValidationIssue("empty", path, "CSV has no header row")
     except (OSError, UnicodeDecodeError, pd.errors.ParserError) as exc:
         return ValidationIssue("invalid_csv", path, f"CSV could not be read: {exc}")
-    if len(table.columns) == 0:
-        return ValidationIssue("invalid_csv", path, "CSV has no columns")
-    missing_columns = [column for column in required_columns if column not in table.columns]
+    return table.columns
+
+
+def _missing_csv_columns(path: Path, columns: pd.Index, required_columns: Sequence[str]) -> ValidationIssue | None:
+    missing_columns = [column for column in required_columns if column not in columns]
     if missing_columns:
         return ValidationIssue("invalid_schema", path, f"CSV is missing required columns: {', '.join(missing_columns)}")
     return None
+
+
+def _validate_csv(path: Path, required_columns: Sequence[str]) -> ValidationIssue | None:
+    columns = _read_csv_header(path)
+    if isinstance(columns, ValidationIssue):
+        return columns
+    if len(columns) == 0:
+        return ValidationIssue("invalid_csv", path, "CSV has no columns")
+    return _missing_csv_columns(path, columns, required_columns)
 
 
 def _sha256(path: Path) -> str:
@@ -103,28 +114,11 @@ def _manifest_entries(paths: Sequence[Path]) -> dict[str, str]:
     return {_display_path(path): _sha256(path) for path in paths}
 
 
-def write_manifest(
-    *,
-    path: Path,
-    mode: str,
-    input_dir: Path,
-    config: Path,
-    expected_inventory: Path | None,
-    public_output_dir: Path,
-) -> None:
-    sources = _small_sources(input_dir, config, expected_inventory)
-    outputs = [public_output_dir / name for name in _required_outputs(mode)]
-    missing = [candidate for candidate in [*sources, *outputs] if not candidate.is_file()]
-    if missing:
-        names = ", ".join(_display_path(candidate) for candidate in missing)
-        raise FileNotFoundError(f"Cannot write manifest; required files are missing: {names}")
-    payload = {
-        "version": MANIFEST_VERSION,
-        "sources": _manifest_entries(sources),
-        "outputs": _manifest_entries(outputs),
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+def _missing_manifest_files(sources: Sequence[Path], outputs: Sequence[Path]) -> list[Path]:
+    return [candidate for candidate in [*sources, *outputs] if not candidate.is_file()]
+
+
+def _write_manifest_file(path: Path, serialized: str) -> None:
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -146,51 +140,150 @@ def write_manifest(
                 pass
 
 
+def write_manifest(
+    *,
+    path: Path,
+    mode: str,
+    input_dir: Path,
+    config: Path,
+    expected_inventory: Path | None,
+    public_output_dir: Path,
+) -> None:
+    sources = _small_sources(input_dir, config, expected_inventory)
+    outputs = [public_output_dir / name for name in _required_outputs(mode)]
+    missing = _missing_manifest_files(sources, outputs)
+    if missing:
+        names = ", ".join(_display_path(candidate) for candidate in missing)
+        raise FileNotFoundError(f"Cannot write manifest; required files are missing: {names}")
+    payload = {
+        "version": MANIFEST_VERSION,
+        "sources": _manifest_entries(sources),
+        "outputs": _manifest_entries(outputs),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    _write_manifest_file(path, serialized)
+
+
 def _is_sha256(value: object) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def _read_manifest(path: Path) -> dict[str, object] | ValidationIssue:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return ValidationIssue("invalid_manifest", path, f"manifest could not be read: {exc}")
+    if not isinstance(payload, dict) or payload.get("version") != MANIFEST_VERSION:
+        return ValidationIssue("invalid_manifest", path, f"manifest version must be {MANIFEST_VERSION}")
+    unexpected_keys = sorted(set(payload) - {"version", "sources", "outputs"})
+    if unexpected_keys:
+        return ValidationIssue("invalid_manifest", path, f"manifest has unexpected top-level entries: {', '.join(unexpected_keys)}")
+    return cast(dict[str, object], payload)
+
+
+def _manifest_contract_details(expected_keys: set[str], recorded_keys: set[str]) -> str:
+    details = []
+    missing_keys = sorted(expected_keys - recorded_keys)
+    extra_keys = sorted(recorded_keys - expected_keys)
+    if missing_keys:
+        details.append(f"missing entries: {', '.join(missing_keys)}")
+    if extra_keys:
+        details.append(f"unexpected entries: {', '.join(extra_keys)}")
+    return "; ".join(details)
+
+
+def _manifest_hash_issue(manifest_path: Path, path: Path, recorded: dict[str, object]) -> ValidationIssue | None:
+    if not path.is_file():
+        return None
+    key = _display_path(path)
+    expected_hash = recorded[key]
+    if not _is_sha256(expected_hash):
+        return ValidationIssue("invalid_manifest", manifest_path, f"manifest hash for {key} is not a SHA-256 digest")
+    if _sha256(path) != expected_hash:
+        return ValidationIssue("content_changed", path, "file content differs from manifest")
+    return None
+
+
+def _validate_manifest_section(
+    manifest_path: Path, section: str, recorded_value: object, current_paths: Sequence[Path]
+) -> list[ValidationIssue]:
+    if not isinstance(recorded_value, dict):
+        return [ValidationIssue("invalid_manifest", manifest_path, f"manifest {section} must be an object")]
+    recorded = cast(dict[str, object], recorded_value)
+    expected_keys = {_display_path(candidate) for candidate in current_paths}
+    details = _manifest_contract_details(expected_keys, set(recorded))
+    if details:
+        return [ValidationIssue("invalid_manifest", manifest_path, f"manifest {section} contract mismatch ({details})")]
+    return _manifest_hash_issues(manifest_path, current_paths, recorded)
+
+
+def _manifest_hash_issues(manifest_path: Path, current_paths: Sequence[Path], recorded: dict[str, object]) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for current_path in current_paths:
+        issue = _manifest_hash_issue(manifest_path, current_path, recorded)
+        if issue is not None:
+            issues.append(issue)
+    return issues
 
 
 def _validate_manifest(path: Path, sources: Sequence[Path], outputs: Sequence[Path]) -> list[ValidationIssue]:
     if not path.exists():
         return [ValidationIssue("manifest_missing", path, "manifest file is missing")]
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        return [ValidationIssue("invalid_manifest", path, f"manifest could not be read: {exc}")]
-    if not isinstance(payload, dict) or payload.get("version") != MANIFEST_VERSION:
-        return [ValidationIssue("invalid_manifest", path, f"manifest version must be {MANIFEST_VERSION}")]
-    unexpected_keys = sorted(set(payload) - {"version", "sources", "outputs"})
-    if unexpected_keys:
-        return [ValidationIssue("invalid_manifest", path, f"manifest has unexpected top-level entries: {', '.join(unexpected_keys)}")]
+    payload = _read_manifest(path)
+    if isinstance(payload, ValidationIssue):
+        return [payload]
 
     issues: list[ValidationIssue] = []
     for section, current_paths in (("sources", sources), ("outputs", outputs)):
-        recorded_value = payload.get(section)
-        if not isinstance(recorded_value, dict):
-            issues.append(ValidationIssue("invalid_manifest", path, f"manifest {section} must be an object"))
-            continue
-        recorded = cast(dict[str, object], recorded_value)
-        expected_keys = {_display_path(candidate) for candidate in current_paths}
-        missing_keys = sorted(expected_keys - set(recorded))
-        extra_keys = sorted(set(recorded) - expected_keys)
-        if missing_keys or extra_keys:
-            details = []
-            if missing_keys:
-                details.append(f"missing entries: {', '.join(missing_keys)}")
-            if extra_keys:
-                details.append(f"unexpected entries: {', '.join(extra_keys)}")
-            issues.append(ValidationIssue("invalid_manifest", path, f"manifest {section} contract mismatch ({'; '.join(details)})"))
-            continue
-        for current_path in current_paths:
-            if not current_path.is_file():
-                continue
-            key = _display_path(current_path)
-            expected_hash = recorded[key]
-            if not _is_sha256(expected_hash):
-                issues.append(ValidationIssue("invalid_manifest", path, f"manifest hash for {key} is not a SHA-256 digest"))
-            elif _sha256(current_path) != expected_hash:
-                issues.append(ValidationIssue("content_changed", current_path, "file content differs from manifest"))
+        issues.extend(_validate_manifest_section(path, section, payload.get(section), current_paths))
     return issues
+
+
+def _validate_output_file(path: Path) -> ValidationIssue | None:
+    if not path.exists():
+        return ValidationIssue("missing", path, "required output artifact is missing")
+    if not path.is_file():
+        return ValidationIssue("not_file", path, "required output path is not a file")
+    if path.stat().st_size == 0:
+        return ValidationIssue("empty", path, "required output artifact is empty")
+    if path.suffix.lower() == ".csv":
+        return _validate_csv(path, REQUIRED_QUANT_TABLE_COLUMNS[path.stem])
+    return None
+
+
+def _stale_output_issue(path: Path, newest_source_mtime: float | None, allow_stale: bool) -> ValidationIssue | None:
+    if newest_source_mtime is not None and path.stat().st_mtime < newest_source_mtime and not allow_stale:
+        return ValidationIssue("stale", path, "output is older than at least one input/config file")
+    return None
+
+
+def _validate_outputs(
+    output_paths: Sequence[Path], newest_source_mtime: float | None, allow_stale: bool
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for path in output_paths:
+        output_issue = _validate_output_file(path)
+        if output_issue is not None:
+            issues.append(output_issue)
+            continue
+        stale_issue = _stale_output_issue(path, newest_source_mtime, allow_stale)
+        if stale_issue is not None:
+            issues.append(stale_issue)
+    return issues
+
+
+def _newest_source_mtime(sources: Sequence[Path]) -> float | None:
+    source_files = [path for path in sources if path.exists() and path.is_file()]
+    return max((path.stat().st_mtime for path in source_files), default=None)
+
+
+def _optional_manifest_issues(
+    manifest_path: Path | None, sources: Sequence[Path], output_paths: Sequence[Path]
+) -> list[ValidationIssue]:
+    if manifest_path is None:
+        return []
+    return _validate_manifest(manifest_path, sources, output_paths)
 
 
 def validate_artifacts(
@@ -205,29 +298,11 @@ def validate_artifacts(
 ) -> list[ValidationIssue]:
     sources = _small_sources(input_dir, config, expected_inventory)
     issues = _validate_source_files(sources)
-    source_files = [path for path in sources if path.exists() and path.is_file()]
-    newest_source_mtime = max((path.stat().st_mtime for path in source_files), default=None)
+    newest_source_mtime = _newest_source_mtime(sources)
 
     output_paths = [public_output_dir / relative_name for relative_name in _required_outputs(mode)]
-    for path in output_paths:
-        if not path.exists():
-            issues.append(ValidationIssue("missing", path, "required output artifact is missing"))
-            continue
-        if not path.is_file():
-            issues.append(ValidationIssue("not_file", path, "required output path is not a file"))
-            continue
-        if path.stat().st_size == 0:
-            issues.append(ValidationIssue("empty", path, "required output artifact is empty"))
-            continue
-        if path.suffix.lower() == ".csv":
-            csv_issue = _validate_csv(path, REQUIRED_QUANT_TABLE_COLUMNS[path.stem])
-            if csv_issue is not None:
-                issues.append(csv_issue)
-                continue
-        if newest_source_mtime is not None and path.stat().st_mtime < newest_source_mtime and not allow_stale:
-            issues.append(ValidationIssue("stale", path, "output is older than at least one input/config file"))
-    if manifest_path is not None:
-        issues.extend(_validate_manifest(manifest_path, sources, output_paths))
+    issues.extend(_validate_outputs(output_paths, newest_source_mtime, allow_stale))
+    issues.extend(_optional_manifest_issues(manifest_path, sources, output_paths))
     return issues
 
 

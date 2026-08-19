@@ -45,21 +45,32 @@ def group_summary_ci(df: pd.DataFrame, group_col: str, value_col: str) -> pd.Dat
     return pd.DataFrame(rows)[["group", "n", "mean", "sd", "ci_low", "ci_high"]]
 
 
-def welch_anova(df: pd.DataFrame, group_col: str, value_col: str) -> StatisticalTestResult:
-    groups = [_clean(g[value_col]) for _, g in df.groupby(group_col, sort=True)]
-    groups = [g for g in groups if len(g)]
+def _welch_groups(df: pd.DataFrame, group_col: str, value_col: str) -> list[np.ndarray]:
+    return [group for group in (_clean(part[value_col]) for _, part in df.groupby(group_col, sort=True)) if len(group)]
+
+
+def _welch_is_degenerate(groups: list[np.ndarray]) -> bool:
     if len(groups) < 2:
-        return {"statistic": math.nan, "p_value": math.nan}
+        return True
     ns = np.array([len(g) for g in groups], dtype=float)
     if np.any(ns < 2):
-        return {"statistic": math.nan, "p_value": math.nan}
-    means = np.array([g.mean() for g in groups])
+        return True
     variances = np.array([g.var(ddof=1) for g in groups])
-    if np.all(variances == 0):
-        return {"statistic": math.nan, "p_value": math.nan}
-    if np.any(variances == 0):
-        res = stats.f_oneway(*groups)
-        return {"statistic": float(res.statistic), "p_value": float(res.pvalue)}
+    return bool(np.all(variances == 0))
+
+
+def _welch_zero_variance_result(groups: list[np.ndarray]) -> StatisticalTestResult | None:
+    variances = np.array([group.var(ddof=1) for group in groups])
+    if not np.any(variances == 0):
+        return None
+    result = stats.f_oneway(*groups)
+    return {"statistic": float(result.statistic), "p_value": float(result.pvalue)}
+
+
+def _welch_statistic(groups: list[np.ndarray]) -> StatisticalTestResult:
+    ns = np.array([len(group) for group in groups], dtype=float)
+    means = np.array([group.mean() for group in groups])
+    variances = np.array([group.var(ddof=1) for group in groups])
     weights = ns / variances
     weighted_mean = np.sum(weights * means) / np.sum(weights)
     k = len(groups)
@@ -71,6 +82,14 @@ def welch_anova(df: pd.DataFrame, group_col: str, value_col: str) -> Statistical
     return {"statistic": float(statistic), "p_value": float(stats.f.sf(statistic, df_num, df_den))}
 
 
+def welch_anova(df: pd.DataFrame, group_col: str, value_col: str) -> StatisticalTestResult:
+    groups = _welch_groups(df, group_col, value_col)
+    if _welch_is_degenerate(groups):
+        return {"statistic": math.nan, "p_value": math.nan}
+    fallback = _welch_zero_variance_result(groups)
+    return fallback if fallback is not None else _welch_statistic(groups)
+
+
 def kruskal_test(df: pd.DataFrame, group_col: str, value_col: str) -> StatisticalTestResult:
     groups = [_clean(g[value_col]) for _, g in df.groupby(group_col, sort=True)]
     groups = [g for g in groups if len(g)]
@@ -78,6 +97,24 @@ def kruskal_test(df: pd.DataFrame, group_col: str, value_col: str) -> Statistica
         return {"statistic": math.nan, "p_value": math.nan}
     res = stats.kruskal(*groups)
     return {"statistic": float(res.statistic), "p_value": float(res.pvalue)}
+
+
+def _permutation_groups(frame: pd.DataFrame, group_col: str, value_col: str) -> list[np.ndarray]:
+    return [group[value_col].to_numpy() for _, group in frame.groupby(group_col)]
+
+
+def _permutation_is_degenerate(groups: list[np.ndarray]) -> bool:
+    return any(len(group) < 2 for group in groups) or all(np.var(group, ddof=0) == 0 for group in groups)
+
+
+def _permutation_p_value(values: np.ndarray, labels: np.ndarray, observed: float, seed: int, n_perm: int) -> float:
+    rng = np.random.default_rng(seed)
+    count = 0
+    for _ in range(n_perm):
+        perm = rng.permutation(values)
+        stat = stats.f_oneway(*[perm[labels == label] for label in sorted(set(labels))]).statistic
+        count += stat >= observed
+    return float((count + 1) / (n_perm + 1))
 
 
 def permutation_anova(
@@ -90,19 +127,34 @@ def permutation_anova(
     frame = df[[group_col, value_col]].dropna()
     if frame[group_col].nunique() < 2:
         return {"statistic": math.nan, "p_value": math.nan}
-    groups = [g[value_col].to_numpy() for _, g in frame.groupby(group_col)]
-    if any(len(group) < 2 for group in groups) or all(np.var(group, ddof=0) == 0 for group in groups):
+    groups = _permutation_groups(frame, group_col, value_col)
+    if _permutation_is_degenerate(groups):
         return {"statistic": math.nan, "p_value": math.nan}
     observed = stats.f_oneway(*groups).statistic
-    rng = np.random.default_rng(seed)
     values = frame[value_col].to_numpy()
     labels = frame[group_col].to_numpy()
-    count = 0
-    for _ in range(n_perm):
-        perm = rng.permutation(values)
-        stat = stats.f_oneway(*[perm[labels == label] for label in sorted(set(labels))]).statistic
-        count += stat >= observed
-    return {"statistic": float(observed), "p_value": float((count + 1) / (n_perm + 1))}
+    return {"statistic": float(observed), "p_value": _permutation_p_value(values, labels, observed, seed, n_perm)}
+
+
+def _hedges_g_estimate(a: np.ndarray, b: np.ndarray) -> float:
+    if len(a) < 2 or len(b) < 2:
+        return math.nan
+    pooled = math.sqrt(((len(a) - 1) * a.var(ddof=1) + (len(b) - 1) * b.var(ddof=1)) / (len(a) + len(b) - 2))
+    if pooled == 0:
+        return 0.0
+    d = (a.mean() - b.mean()) / pooled
+    correction = 1 - 3 / (4 * (len(a) + len(b)) - 9)
+    return float(d * correction)
+
+
+def _valid_hedges_inputs(a: np.ndarray, b: np.ndarray, estimate: float) -> bool:
+    return len(a) >= 2 and len(b) >= 2 and bool(np.isfinite(estimate))
+
+
+def _bootstrap_hedges_g(a: np.ndarray, b: np.ndarray, seed: int, n_boot: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    boots = [_hedges_g_estimate(rng.choice(a, len(a), True), rng.choice(b, len(b), True)) for _ in range(n_boot)]
+    return np.array([value for value in boots if np.isfinite(value)])
 
 
 def hedges_g(
@@ -112,21 +164,10 @@ def hedges_g(
     n_boot: int = 10000,
 ) -> EffectSizeResult:
     a, b = _clean(x), _clean(y)
-    def calc(u: np.ndarray, v: np.ndarray) -> float:
-        if len(u) < 2 or len(v) < 2:
-            return math.nan
-        pooled = math.sqrt(((len(u) - 1) * u.var(ddof=1) + (len(v) - 1) * v.var(ddof=1)) / (len(u) + len(v) - 2))
-        if pooled == 0:
-            return 0.0
-        d = (u.mean() - v.mean()) / pooled
-        correction = 1 - 3 / (4 * (len(u) + len(v)) - 9)
-        return float(d * correction)
-    estimate = calc(a, b)
-    if len(a) < 2 or len(b) < 2 or not np.isfinite(estimate):
+    estimate = _hedges_g_estimate(a, b)
+    if not _valid_hedges_inputs(a, b, estimate):
         return {"estimate": estimate, "ci_low": math.nan, "ci_high": math.nan}
-    rng = np.random.default_rng(seed)
-    boots = [calc(rng.choice(a, len(a), True), rng.choice(b, len(b), True)) for _ in range(n_boot)]
-    boots = np.array([v for v in boots if np.isfinite(v)])
+    boots = _bootstrap_hedges_g(a, b, seed, n_boot)
     return {"estimate": estimate, "ci_low": float(np.quantile(boots, 0.025)), "ci_high": float(np.quantile(boots, 0.975))}
 
 
@@ -156,6 +197,13 @@ def spearman_with_ci(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=stats.ConstantInputWarning)
         r, p = stats.spearmanr(frame["x"], frame["y"])
+    vals = _spearman_bootstrap(frame, seed=seed, n_boot=n_boot)
+    if len(vals) == 0:
+        return {"correlation": float(r), "p_value": float(p), "ci_low": math.nan, "ci_high": math.nan, "n": len(frame)}
+    return {"correlation": float(r), "p_value": float(p), "ci_low": float(np.quantile(vals, 0.025)), "ci_high": float(np.quantile(vals, 0.975)), "n": len(frame)}
+
+
+def _spearman_bootstrap(frame: pd.DataFrame, *, seed: int, n_boot: int) -> np.ndarray:
     rng = np.random.default_rng(seed)
     vals = []
     for _ in range(n_boot):
@@ -163,10 +211,7 @@ def spearman_with_ci(
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=stats.ConstantInputWarning)
             vals.append(stats.spearmanr(sample["x"], sample["y"]).statistic)
-    vals = np.array([v for v in vals if np.isfinite(v)])
-    if len(vals) == 0:
-        return {"correlation": float(r), "p_value": float(p), "ci_low": math.nan, "ci_high": math.nan, "n": len(frame)}
-    return {"correlation": float(r), "p_value": float(p), "ci_low": float(np.quantile(vals, 0.025)), "ci_high": float(np.quantile(vals, 0.975)), "n": len(frame)}
+    return np.array([value for value in vals if np.isfinite(value)])
 
 
 def benjamini_hochberg(p_values: list[float] | pd.Series) -> list[float]:

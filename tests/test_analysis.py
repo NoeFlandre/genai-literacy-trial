@@ -11,6 +11,8 @@ from genai_literacy_trial.analysis import (
     convert_letter_grade,
     filter_complete_pre_post,
     mean_prompt_scores,
+    observed_metrics_from_outputs,
+    optional_locus_control_before,
     pearson_stat,
     validate_against_targets,
 )
@@ -82,6 +84,40 @@ def test_statistical_helpers_return_named_results() -> None:
     assert anova["p_value"] < 0.05
     assert corr["correlation"] > 0.99
     assert corr["p_value"] < 0.001
+
+
+def test_optional_locus_control_before_returns_empty_when_columns_are_unavailable() -> None:
+    assert optional_locus_control_before(pd.DataFrame({"Phase": ["Before"]}), pd.DataFrame()) == {}
+    assert optional_locus_control_before(pd.DataFrame({"Email": ["p01"]}), pd.DataFrame()) == {}
+
+
+def test_optional_locus_control_before_uses_pre_rows_and_named_prompt_scores() -> None:
+    survey = pd.DataFrame(
+        {
+            "Email": ["p01", "p02", "p03"],
+            "Phase": ["Before", "Before", "After"],
+            **{column: ["Agree", "Strongly agree", "Neutral"] for column in [
+                " [I feel like I control what happens while working with ChatGPT because I use it as I want and get what I want]",
+                " [When using ChatGPT, the primary responsibility to get what I want belongs to ChatGPT, not to me]",
+                " [When using ChatGPT, I can retain attention and interest in this activity longer than when using other information search systems such as Google or Stack Overflow]",
+                " [Time seems to pass quickly while I am using ChatGPT]",
+            ]},
+        }
+    )
+    prompt_scores = pd.DataFrame({"Email": ["p01", "p02"], "mean_prompt_score": [1.0, 2.0]})
+
+    observed = optional_locus_control_before(survey, prompt_scores)
+
+    assert observed["prompt_score_locus_control_before_n"] == 2.0
+    assert observed["prompt_score_locus_control_before_r"] == 1.0
+
+
+def test_observed_metrics_prefers_paper_statistics_and_falls_back_to_sample_summary() -> None:
+    paper = pd.DataFrame({"metric": ["retained_students"], "observed": [45.0]})
+    sample = pd.DataFrame({"retained_students": [44.0], "dropouts": [2.0]})
+
+    assert observed_metrics_from_outputs({"paper_statistics": paper, "sample_summary": sample}) == {"retained_students": 45.0}
+    assert observed_metrics_from_outputs({"sample_summary": sample}) == {"retained_students": 44.0, "dropouts": 2.0}
 
 
 def test_build_paper_aggregates_uses_only_safe_aggregate_tables() -> None:

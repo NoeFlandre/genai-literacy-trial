@@ -7,6 +7,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from genai_literacy_trial import reproduce_small
 from genai_literacy_trial.quant_figures import FIGURE_FORMATS, FIGURE_STEMS
 from genai_literacy_trial.quant_report import QUANTITATIVE_REPORT_FILENAME
 from genai_literacy_trial.quant_schema import QUANT_TABLE_OUTPUT_FORMAT, REQUIRED_QUANT_TABLES
@@ -289,3 +292,43 @@ def test_validate_artifacts_module_entry_point_reports_missing_outputs(tmp_path:
 
     assert result.returncode == 1
     assert "missing" in result.stdout
+
+
+def test_reproduce_small_main_covers_clean_manifest_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    public_output_dir = tmp_path / "public"
+    private_output_dir = tmp_path / "private"
+    manifest = tmp_path / "manifest.json"
+    monkeypatch.setattr(
+        reproduce_small,
+        "run_quant_analysis",
+        lambda *_args: {"public_output_dir": public_output_dir, "private_output_dir": private_output_dir},
+    )
+    monkeypatch.setattr(reproduce_small, "validate_artifacts", lambda **_kwargs: [])
+    monkeypatch.setattr(reproduce_small, "print_validation_report", lambda _issues: None)
+    monkeypatch.setattr(reproduce_small, "write_manifest", lambda **_kwargs: None)
+
+    result = reproduce_small.main(
+        [
+            "--output-dir",
+            str(private_output_dir),
+            "--public-output-dir",
+            str(public_output_dir),
+            "--manifest",
+            str(manifest),
+            "--show-model-warnings",
+        ]
+    )
+
+    assert result == 0
+
+
+def test_reproduce_small_main_returns_one_for_validation_issues(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        reproduce_small,
+        "run_quant_analysis",
+        lambda *_args: {"public_output_dir": tmp_path / "public", "private_output_dir": tmp_path / "private"},
+    )
+    monkeypatch.setattr(reproduce_small, "validate_artifacts", lambda **_kwargs: [object()])
+    monkeypatch.setattr(reproduce_small, "print_validation_report", lambda _issues: None)
+
+    assert reproduce_small.main(["--output-dir", str(tmp_path / "private"), "--public-output-dir", str(tmp_path / "public")]) == 1

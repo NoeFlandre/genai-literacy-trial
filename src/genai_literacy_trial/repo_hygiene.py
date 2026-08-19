@@ -11,7 +11,13 @@ from genai_literacy_trial.paths import REPO_ROOT
 DEFAULT_MAX_MIB = 5.0
 
 
-def tracked_files(root: Path) -> list[Path]:
+def _git_process_error(root: Path, exc: subprocess.CalledProcessError) -> RuntimeError:
+    stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else str(exc.stderr or "")
+    detail = stderr.strip() or f"exit status {exc.returncode}"
+    return RuntimeError(f"git ls-files failed for {root}: {detail}")
+
+
+def _run_git_ls_files(root: Path) -> bytes:
     try:
         result = subprocess.run(
             ["git", "ls-files", "-z"],
@@ -22,10 +28,12 @@ def tracked_files(root: Path) -> list[Path]:
     except FileNotFoundError as exc:
         raise RuntimeError("git executable was not found; install git or run this check in an environment with git available") from exc
     except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else str(exc.stderr or "")
-        detail = stderr.strip() or f"exit status {exc.returncode}"
-        raise RuntimeError(f"git ls-files failed for {root}: {detail}") from exc
-    return [root / raw.decode("utf-8") for raw in result.stdout.split(b"\0") if raw]
+        raise _git_process_error(root, exc) from exc
+    return result.stdout
+
+
+def tracked_files(root: Path) -> list[Path]:
+    return [root / raw.decode("utf-8") for raw in _run_git_ls_files(root).split(b"\0") if raw]
 
 
 def oversized_tracked_files(root: Path, max_mib: float) -> list[tuple[Path, float]]:

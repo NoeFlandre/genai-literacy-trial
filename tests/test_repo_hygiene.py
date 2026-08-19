@@ -33,3 +33,25 @@ def test_repo_hygiene_reports_git_ls_files_failures(monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(RuntimeError, match="git ls-files failed.*not a git repository"):
         repo_hygiene.tracked_files(tmp_path)
+
+
+def test_oversized_tracked_files_reports_only_files_over_threshold(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    small = tmp_path / "small.txt"
+    large = tmp_path / "large.txt"
+    small.write_bytes(b"x")
+    large.write_bytes(b"x" * 11)
+    monkeypatch.setattr(repo_hygiene, "tracked_files", lambda _root: [small, large])
+
+    assert repo_hygiene.oversized_tracked_files(tmp_path, max_mib=10 / (1024 * 1024)) == [(large.relative_to(tmp_path), 11 / (1024 * 1024))]
+
+
+def test_repo_hygiene_main_reports_pass_and_failure(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    monkeypatch.setattr(repo_hygiene, "oversized_tracked_files", lambda *_args: [])
+    assert repo_hygiene.main(["--root", str(tmp_path)]) == 0
+    assert "Repository hygiene passed" in capsys.readouterr().out
+
+    monkeypatch.setattr(repo_hygiene, "oversized_tracked_files", lambda *_args: [(Path("large.bin"), 6.0)])
+    assert repo_hygiene.main(["--root", str(tmp_path)]) == 1
+    output = capsys.readouterr().out
+    assert "Repository hygiene failed" in output
+    assert "large.bin: 6.00 MiB" in output

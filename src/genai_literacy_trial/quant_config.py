@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 import tomllib
-from typing import TypedDict, cast
+from typing import Sequence, TypedDict, cast
 
 from genai_literacy_trial.scales import GRADE_POINTS, LIKERT_POINTS
 
@@ -138,18 +138,15 @@ def _validate_numeric_table(value: object, section: str) -> None:
             raise ValueError(f"{section}.{key} must be a number")
 
 
-def _validate_quant_config_schema(data: object) -> None:
-    config = _as_table(data, "configuration")
-    unknown_sections = sorted(set(config) - _CONFIG_SECTIONS)
-    if unknown_sections:
-        raise ValueError(f"Unknown configuration section: {', '.join(unknown_sections)}")
-
-    columns = _as_table(config.get("columns", {}), "columns")
+def _validate_columns_schema(value: object) -> None:
+    columns = _as_table(value, "columns")
     _reject_unknown_keys(columns, _COLUMN_KEYS, "columns")
     for key, value in columns.items():
         _require_string(value, f"columns.{key}")
 
-    labels = _as_table(config.get("labels", {}), "labels")
+
+def _validate_labels_schema(value: object) -> None:
+    labels = _as_table(value, "labels")
     _reject_unknown_keys(labels, _LABEL_KEYS, "labels")
     for key in ("pre", "post"):
         if key in labels:
@@ -159,15 +156,65 @@ def _validate_quant_config_schema(data: object) -> None:
     if "assignments" in labels:
         _require_integer_list(labels["assignments"], "labels.assignments")
 
-    privacy = _as_table(config.get("privacy", {}), "privacy")
+
+def _validate_privacy_schema(value: object) -> None:
+    privacy = _as_table(value, "privacy")
     _reject_unknown_keys(privacy, _PRIVACY_KEYS, "privacy")
     if "min_public_cell_count" in privacy:
         _require_integer(privacy["min_public_cell_count"], "privacy.min_public_cell_count")
 
+
+def _validate_mapping_schema(config: dict[str, object]) -> None:
     _validate_string_list_table(config.get("survey_dimensions", {}), "survey_dimensions")
     _validate_string_list_table(config.get("reverse_coded_items", {}), "reverse_coded_items")
     _validate_numeric_table(config.get("likert_mapping", {}), "likert_mapping")
     _validate_numeric_table(config.get("grade_mapping", {}), "grade_mapping")
+
+
+def _validate_quant_config_schema(data: object) -> None:
+    config = _as_table(data, "configuration")
+    unknown_sections = sorted(set(config) - _CONFIG_SECTIONS)
+    if unknown_sections:
+        raise ValueError(f"Unknown configuration section: {', '.join(unknown_sections)}")
+    _validate_columns_schema(config.get("columns", {}))
+    _validate_labels_schema(config.get("labels", {}))
+    _validate_privacy_schema(config.get("privacy", {}))
+    _validate_mapping_schema(config)
+
+
+def _string_list_mapping(value: object, section: str) -> dict[str, list[str]]:
+    table = cast(dict[str, list[str]], _as_table(value, section))
+    return {str(key): list(items) for key, items in table.items()}
+
+
+def _numeric_mapping(value: object, section: str) -> dict[str, float]:
+    table = cast(dict[str, float], _as_table(value, section))
+    return {str(key): float(item) for key, item in table.items()}
+
+
+def _build_quant_config(data: dict[str, object], default: QuantConfig) -> QuantConfig:
+    columns = cast(dict[str, str], _as_table(data.get("columns", {}), "columns"))
+    labels = _as_table(data.get("labels", {}), "labels")
+    privacy = _as_table(data.get("privacy", {}), "privacy")
+    survey_dimensions = _string_list_mapping(data.get("survey_dimensions", default.survey_dimensions), "survey_dimensions")
+    reverse_coded_items = _string_list_mapping(data.get("reverse_coded_items", default.reverse_coded_items), "reverse_coded_items")
+    likert_mapping = _numeric_mapping(data.get("likert_mapping", default.likert_mapping), "likert_mapping")
+    grade_mapping = _numeric_mapping(data.get("grade_mapping", default.grade_mapping), "grade_mapping")
+    groups = cast(Sequence[str], labels.get("groups", default.groups))
+    assignments = cast(Sequence[int], labels.get("assignments", default.assignments))
+    min_public_cell_count = cast(int, privacy.get("min_public_cell_count", default.min_public_cell_count))
+    return QuantConfig(
+        columns=QuantColumns(**columns),
+        pre_label=str(labels.get("pre", default.pre_label)),
+        post_label=str(labels.get("post", default.post_label)),
+        groups=tuple(str(x) for x in groups),
+        assignments=tuple(int(x) for x in assignments),
+        min_public_cell_count=min_public_cell_count,
+        survey_dimensions=survey_dimensions,
+        reverse_coded_items=reverse_coded_items,
+        likert_mapping=likert_mapping,
+        grade_mapping=grade_mapping,
+    )
 
 
 def load_quant_config(path: Path | None) -> QuantConfig:
@@ -176,38 +223,54 @@ def load_quant_config(path: Path | None) -> QuantConfig:
     default = QuantConfig.default()
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     _validate_quant_config_schema(data)
-    columns = QuantColumns(**data.get("columns", {}))
-    labels = data.get("labels", {})
-    return _validate_quant_config(
-        QuantConfig(
-            columns=columns,
-            pre_label=str(labels.get("pre", default.pre_label)),
-            post_label=str(labels.get("post", default.post_label)),
-            groups=tuple(str(x) for x in labels.get("groups", default.groups)),
-            assignments=tuple(int(x) for x in labels.get("assignments", default.assignments)),
-            min_public_cell_count=int(data.get("privacy", {}).get("min_public_cell_count", default.min_public_cell_count)),
-            survey_dimensions={str(k): list(v) for k, v in data.get("survey_dimensions", default.survey_dimensions).items()},
-            reverse_coded_items={str(k): list(v) for k, v in data.get("reverse_coded_items", default.reverse_coded_items).items()},
-            likert_mapping={str(k): float(v) for k, v in data.get("likert_mapping", default.likert_mapping).items()},
-            grade_mapping={str(k): float(v) for k, v in data.get("grade_mapping", default.grade_mapping).items()},
-        )
-    )
+    return _validate_quant_config(_build_quant_config(data, default))
+
+
+def _validate_distinct_values(values: tuple[object, ...], field: str) -> None:
+    if not values:
+        raise ValueError(f"{field} must include at least one value")
+    if len(set(values)) != len(values):
+        raise ValueError(f"{field} must be unique")
+
+
+def _validate_quant_labels(config: QuantConfig) -> None:
+    if config.pre_label == config.post_label:
+        raise ValueError("pre and post labels must differ")
 
 
 def _validate_quant_config(config: QuantConfig) -> QuantConfig:
-    if config.pre_label == config.post_label:
-        raise ValueError("pre and post labels must differ")
-    if not config.groups:
-        raise ValueError("groups must include at least one label")
-    if len(set(config.groups)) != len(config.groups):
-        raise ValueError("groups must be unique")
-    if not config.assignments:
-        raise ValueError("assignments must include at least one value")
-    if len(set(config.assignments)) != len(config.assignments):
-        raise ValueError("assignments must be unique")
+    _validate_quant_labels(config)
+    _validate_distinct_values(config.groups, "groups")
+    _validate_distinct_values(config.assignments, "assignments")
     if config.min_public_cell_count < 1:
         raise ValueError("min_public_cell_count must be at least 1")
     return config
+
+
+def _validate_inventory_scalar(key: str, value: object, path: Path) -> None:
+    if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
+        raise ValueError(f"{key} must be a non-negative integer: {path}")
+
+
+def _validate_inventory_scalars(data: dict[str, object], path: Path) -> None:
+    for key in _EXPECTED_INVENTORY_SCALAR_KEYS:
+        _validate_inventory_scalar(key, data.get(key), path)
+
+
+def _validate_inventory_group(group: object, value: object, path: Path) -> None:
+    if not isinstance(group, str):
+        raise ValueError(f"group_counts keys must be strings: {path}")
+    _validate_inventory_scalar(f"group_counts.{group}", value, path)
+
+
+def _validate_inventory_groups(data: dict[str, object], path: Path) -> None:
+    group_counts = data.get("group_counts")
+    if group_counts is None:
+        return
+    if not isinstance(group_counts, dict):
+        raise ValueError(f"group_counts must be a table: {path}")
+    for group, value in group_counts.items():
+        _validate_inventory_group(group, value, path)
 
 
 def load_expected_inventory(path: Path | None) -> ExpectedInventory:
@@ -219,20 +282,6 @@ def load_expected_inventory(path: Path | None) -> ExpectedInventory:
     unknown_keys = sorted(set(data) - _EXPECTED_INVENTORY_KEYS)
     if unknown_keys:
         raise ValueError(f"Unknown expected inventory keys: {', '.join(unknown_keys)}: {path}")
-
-    for key in _EXPECTED_INVENTORY_SCALAR_KEYS:
-        value = data.get(key)
-        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
-            raise ValueError(f"{key} must be a non-negative integer: {path}")
-
-    if "group_counts" in data:
-        group_counts = data["group_counts"]
-        if not isinstance(group_counts, dict):
-            raise ValueError(f"group_counts must be a table: {path}")
-        for group, value in group_counts.items():
-            if not isinstance(group, str):
-                raise ValueError(f"group_counts keys must be strings: {path}")
-            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-                raise ValueError(f"group_counts.{group} must be a non-negative integer: {path}")
-
+    _validate_inventory_scalars(data, path)
+    _validate_inventory_groups(data, path)
     return cast(ExpectedInventory, data)

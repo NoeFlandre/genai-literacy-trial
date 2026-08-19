@@ -60,3 +60,27 @@ def test_audit_privacy_fails_on_public_personal_data(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "email" in result.output
+
+
+def test_validate_paper_reads_paper_statistics_and_writes_report(tmp_path: Path) -> None:
+    output_dir = tmp_path / "paper_outputs"
+    output_dir.mkdir()
+    pd.DataFrame({"metric": ["retained_students"], "observed": [45.0]}).to_csv(output_dir / "paper_statistics.csv", index=False)
+
+    result = CliRunner().invoke(app, ["validate-paper", "--output-dir", str(output_dir)])
+
+    assert result.exit_code == 0, result.output
+    report = pd.read_csv(output_dir / "validation_report.csv")
+    assert set(report.columns) == {"metric", "expected", "observed", "delta", "status"}
+    assert report.loc[report["metric"] == "retained_students", "status"].item() == "ok"
+
+
+def test_validate_paper_falls_back_to_sample_summary(tmp_path: Path) -> None:
+    output_dir = tmp_path / "paper_outputs"
+    output_dir.mkdir()
+    pd.DataFrame({"retained_students": [45.0]}).to_csv(output_dir / "sample_summary.csv", index=False)
+
+    result = CliRunner().invoke(app, ["validate-paper", "--output-dir", str(output_dir)])
+
+    assert result.exit_code == 0, result.output
+    assert (output_dir / "validation_report.csv").exists()

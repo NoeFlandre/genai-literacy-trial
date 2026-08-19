@@ -10,6 +10,7 @@ from scipy import stats
 import statsmodels.formula.api as smf
 
 from genai_literacy_trial.quant_schema import (
+    BootstrapSummary,
     LearningOutcomeTables,
     MeanDifferenceResult,
     ModelDiagnosticsRow,
@@ -114,22 +115,44 @@ def _add_standardized_effect(
     if term not in tidy["term"].to_numpy():
         return tidy
     out = tidy.copy()
-    y_sd = work[outcome].std(ddof=1)
-    if not y_sd or not np.isfinite(y_sd):
+    scale = _standardized_effect_scale(work, term, outcome, from_standardized_predictor)
+    if scale is None:
         return out
-    if from_standardized_predictor:
-        scale = 1.0 / y_sd
-    else:
-        x_sd = work[term].std(ddof=1)
-        if not x_sd or not np.isfinite(x_sd):
-            return out
-        scale = x_sd / y_sd
     mask = out["term"] == term
     out.loc[mask, "std_beta"] = out.loc[mask, "estimate"] * scale
     if include_ci:
         out.loc[mask, "std_ci_low"] = out.loc[mask, "ci_low"] * scale
         out.loc[mask, "std_ci_high"] = out.loc[mask, "ci_high"] * scale
     return out
+
+
+def _standardized_effect_scale(work: pd.DataFrame, term: str, outcome: str, from_standardized_predictor: bool) -> float | None:
+    y_sd = _finite_standard_deviation(work[outcome])
+    if y_sd is None:
+        return None
+    if from_standardized_predictor:
+        return _standardized_predictor_scale(y_sd)
+    x_sd = _finite_standard_deviation(work[term])
+    if x_sd is None:
+        return None
+    return float(x_sd / y_sd)
+
+
+def _finite_standard_deviation(series: pd.Series) -> float | None:
+    standard_deviation = series.std(ddof=1)
+    if not standard_deviation or not np.isfinite(standard_deviation):
+        return None
+    return float(standard_deviation)
+
+
+def _standardized_predictor_scale(y_sd: float) -> float:
+    return float(1.0 / y_sd)
+
+
+def _missing_count(frame: pd.DataFrame, column: str, required: bool) -> int:
+    if not required or column not in frame:
+        return 0
+    return int(frame[column].isna().sum())
 
 
 def _model_diagnostics(
@@ -144,12 +167,12 @@ def _model_diagnostics(
         "starting_n": int(len(frame)),
         "final_n": int(len(frame.dropna(subset=required))),
         "loss_type": "marginal_non_additive",
-        "lost_final_grade": int(frame["final_points"].isna().sum()) if ("final_points" in required or grade_change_required) and "final_points" in frame else 0,
-        "lost_midterm_grade": int(frame["midterm_points"].isna().sum()) if ("midterm_points" in required or grade_change_required) and "midterm_points" in frame else 0,
-        "lost_mean_prompt_score": int(frame["mean_prompt_score"].isna().sum()) if "mean_prompt_score" in required and "mean_prompt_score" in frame else 0,
-        "lost_prior_chatgpt_use_score": int(frame["prior_chatgpt_use_score"].isna().sum()) if "prior_chatgpt_use_score" in required and "prior_chatgpt_use_score" in frame else 0,
-        "lost_survey_composite": int(frame[survey_composite].isna().sum()) if survey_composite and survey_composite in frame else 0,
-        "lost_group": int(frame["group"].isna().sum()) if "group" in required and "group" in frame else 0,
+        "lost_final_grade": _missing_count(frame, "final_points", "final_points" in required or grade_change_required),
+        "lost_midterm_grade": _missing_count(frame, "midterm_points", "midterm_points" in required or grade_change_required),
+        "lost_mean_prompt_score": _missing_count(frame, "mean_prompt_score", "mean_prompt_score" in required),
+        "lost_prior_chatgpt_use_score": _missing_count(frame, "prior_chatgpt_use_score", "prior_chatgpt_use_score" in required),
+        "lost_survey_composite": _missing_count(frame, survey_composite or "", survey_composite is not None),
+        "lost_group": _missing_count(frame, "group", "group" in required),
     }
     return out
 
@@ -342,41 +365,98 @@ def calibration_models(participant_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
+def _normalise_prepost_composites(composites: pd.DataFrame) -> pd.DataFrame:
     composites = composites.copy()
     if "group" not in composites.columns and "group_x" in composites.columns:
         composites = composites.rename(columns={"group_x": "group"})
     if "group" not in composites.columns:
         raise ValueError("pre/post survey change models require group in the composite table")
-    dims = [
-        c
-        for c in composites.columns
-        if c not in {PARTICIPANT_KEY_COLUMN, "phase", "group", "prior_chatgpt_use_score"} and not c.endswith("_items_present")
-    ]
-    rows = []
-    for dim in dims:
-        long = composites[[PARTICIPANT_KEY_COLUMN, "phase", "group", dim]].dropna().copy()
-        try:
-            result = smf.mixedlm(f"{dim} ~ phase * group", data=long, groups=long[PARTICIPANT_KEY_COLUMN]).fit(reml=False, disp=False)
-            if not bool(getattr(result, "converged", True)):
-                raise ValueError("MixedLM did not converge")
-            tidy = _tidy_result(result, f"prepost_{dim}", int(result.nobs))
-            is_interaction = tidy["term"].str.contains(":")
-            phase_rows = tidy[tidy["term"].str.startswith("phase") & ~is_interaction]
-            interaction_rows = tidy[is_interaction]
-            wide = composites.pivot_table(index=PARTICIPANT_KEY_COLUMN, columns="phase", values=dim, aggfunc="mean")
-            diff = wide[NORMALIZED_POST_LABEL] - wide[NORMALIZED_PRE_LABEL] if {NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL} <= set(wide.columns) else pd.Series(dtype=float)
-            stat = mean_ci_bootstrap(diff, n_boot=1000)
-            rows.append({"dimension": dim, "analysis_type": "mixed_model", "pre_mean": float(wide.get(NORMALIZED_PRE_LABEL, pd.Series(dtype=float)).mean()), "post_mean": float(wide.get(NORMALIZED_POST_LABEL, pd.Series(dtype=float)).mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(long[PARTICIPANT_KEY_COLUMN].nunique()), "phase_p_value": float(phase_rows["p_value"].min()) if not phase_rows.empty else math.nan, "interaction_p_value": float(interaction_rows["p_value"].min()) if not interaction_rows.empty else math.nan})
-        except (ValueError, np.linalg.LinAlgError):
-            wide = composites.pivot_table(index=PARTICIPANT_KEY_COLUMN, columns="phase", values=dim, aggfunc="mean")
-            if not {NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL} <= set(wide.columns):
-                continue
-            diff = wide[NORMALIZED_POST_LABEL] - wide[NORMALIZED_PRE_LABEL]
-            stat = mean_ci_bootstrap(diff, n_boot=1000)
-            paired = diff.dropna()
-            p_value = float(stats.ttest_rel(wide.loc[paired.index, NORMALIZED_POST_LABEL], wide.loc[paired.index, NORMALIZED_PRE_LABEL], nan_policy="omit").pvalue) if len(paired) > 1 else float("nan")
-            rows.append({"dimension": dim, "analysis_type": "paired_descriptive_fallback", "pre_mean": float(wide[NORMALIZED_PRE_LABEL].mean()), "post_mean": float(wide[NORMALIZED_POST_LABEL].mean()), "change": stat["mean"], "ci_low": stat["ci_low"], "ci_high": stat["ci_high"], "n": int(paired.shape[0]), "phase_p_value": p_value, "interaction_p_value": float("nan")})
+    return composites
+
+
+def _prepost_dimensions(composites: pd.DataFrame) -> list[str]:
+    excluded = {PARTICIPANT_KEY_COLUMN, "phase", "group", "prior_chatgpt_use_score"}
+    return [column for column in composites.columns if column not in excluded and not column.endswith("_items_present")]
+
+
+def _prepost_wide(composites: pd.DataFrame, dimension: str) -> pd.DataFrame:
+    return composites.pivot_table(index=PARTICIPANT_KEY_COLUMN, columns="phase", values=dimension, aggfunc="mean")
+
+
+def _prepost_change_statistics(wide: pd.DataFrame) -> tuple[pd.Series, BootstrapSummary]:
+    diff = wide[NORMALIZED_POST_LABEL] - wide[NORMALIZED_PRE_LABEL] if {NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL} <= set(wide.columns) else pd.Series(dtype=float)
+    return diff, mean_ci_bootstrap(diff, n_boot=1000)
+
+
+def _prepost_model_p_values(tidy: pd.DataFrame) -> tuple[float, float]:
+    is_interaction = tidy["term"].str.contains(":")
+    phase_rows = tidy[tidy["term"].str.startswith("phase") & ~is_interaction]
+    interaction_rows = tidy[is_interaction]
+    phase_p = float(phase_rows["p_value"].min()) if not phase_rows.empty else math.nan
+    interaction_p = float(interaction_rows["p_value"].min()) if not interaction_rows.empty else math.nan
+    return phase_p, interaction_p
+
+
+def _prepost_mixed_row(composites: pd.DataFrame, dimension: str) -> dict[str, object]:
+    long = composites[[PARTICIPANT_KEY_COLUMN, "phase", "group", dimension]].dropna().copy()
+    result = smf.mixedlm(f"{dimension} ~ phase * group", data=long, groups=long[PARTICIPANT_KEY_COLUMN]).fit(reml=False, disp=False)
+    if not bool(getattr(result, "converged", True)):
+        raise ValueError("MixedLM did not converge")
+    tidy = _tidy_result(result, f"prepost_{dimension}", int(result.nobs))
+    phase_p, interaction_p = _prepost_model_p_values(tidy)
+    wide = _prepost_wide(composites, dimension)
+    _, stat = _prepost_change_statistics(wide)
+    return {
+        "dimension": dimension,
+        "analysis_type": "mixed_model",
+        "pre_mean": float(wide.get(NORMALIZED_PRE_LABEL, pd.Series(dtype=float)).mean()),
+        "post_mean": float(wide.get(NORMALIZED_POST_LABEL, pd.Series(dtype=float)).mean()),
+        "change": stat["mean"],
+        "ci_low": stat["ci_low"],
+        "ci_high": stat["ci_high"],
+        "n": int(long[PARTICIPANT_KEY_COLUMN].nunique()),
+        "phase_p_value": phase_p,
+        "interaction_p_value": interaction_p,
+    }
+
+
+def _paired_p_value(wide: pd.DataFrame, paired: pd.Series) -> float:
+    if len(paired) <= 1:
+        return float("nan")
+    return float(stats.ttest_rel(wide.loc[paired.index, NORMALIZED_POST_LABEL], wide.loc[paired.index, NORMALIZED_PRE_LABEL], nan_policy="omit").pvalue)
+
+
+def _prepost_fallback_row(composites: pd.DataFrame, dimension: str) -> dict[str, object] | None:
+    wide = _prepost_wide(composites, dimension)
+    if not {NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL} <= set(wide.columns):
+        return None
+    diff, stat = _prepost_change_statistics(wide)
+    paired = diff.dropna()
+    return {
+        "dimension": dimension,
+        "analysis_type": "paired_descriptive_fallback",
+        "pre_mean": float(wide[NORMALIZED_PRE_LABEL].mean()),
+        "post_mean": float(wide[NORMALIZED_POST_LABEL].mean()),
+        "change": stat["mean"],
+        "ci_low": stat["ci_low"],
+        "ci_high": stat["ci_high"],
+        "n": int(paired.shape[0]),
+        "phase_p_value": _paired_p_value(wide, paired),
+        "interaction_p_value": float("nan"),
+    }
+
+
+def _prepost_row(composites: pd.DataFrame, dimension: str) -> dict[str, object] | None:
+    try:
+        return _prepost_mixed_row(composites, dimension)
+    except (ValueError, np.linalg.LinAlgError):
+        return _prepost_fallback_row(composites, dimension)
+
+
+def prepost_survey_change_models(composites: pd.DataFrame) -> pd.DataFrame:
+    composites = _normalise_prepost_composites(composites)
+    rows = [_prepost_row(composites, dimension) for dimension in _prepost_dimensions(composites)]
+    rows = [row for row in rows if row is not None]
     out = pd.DataFrame(rows)
     if not out.empty:
         out["fdr_p_value"] = benjamini_hochberg(out["phase_p_value"])
