@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from scipy import stats
 
+import genai_literacy_trial.quant_stats as quant_stats
 from genai_literacy_trial.quant_stats import (
     benjamini_hochberg,
     cronbach_alpha,
@@ -89,6 +90,21 @@ def test_group_summary_ci_preserves_sorted_groups_and_sample_statistics() -> Non
     pd.testing.assert_frame_equal(result, expected)
 
 
+def test_group_summary_ci_reports_undefined_sd_for_singleton_groups() -> None:
+    result = group_summary_ci(
+        pd.DataFrame({"group": ["A", "B", "B"], "value": [1.0, 2.0, 4.0]}),
+        "group",
+        "value",
+    )
+
+    singleton = result.loc[result["group"] == "A"].iloc[0]
+    repeated = result.loc[result["group"] == "B"].iloc[0]
+    assert singleton["n"] == 1
+    assert pd.isna(singleton["sd"])
+    assert repeated["n"] == 2
+    assert repeated["sd"] == np.sqrt(2)
+
+
 def test_two_group_and_boundary_statistical_cases_are_not_collapsed() -> None:
     frame = pd.DataFrame({"group": ["A", "A", "B", "B"], "value": [1.0, 2.0, 4.0, 5.0]})
     kruskal = kruskal_test(frame, "group", "value")
@@ -120,6 +136,53 @@ def test_correlation_and_reliability_edge_cases_keep_their_contracts() -> None:
     assert pd.isna(one_item)
     np.testing.assert_allclose(standardized, [-1.0, 0.0, 1.0])
     np.testing.assert_allclose(constant_standardized, [0.0, 0.0])
+    np.testing.assert_allclose(standardize_series(pd.Series(["1", "2", "3"])), [-1.0, 0.0, 1.0])
+
+
+def test_statistical_boundaries_keep_invalid_inputs_invalid() -> None:
+    one_element_welch = quant_stats._welch_is_degenerate([np.array([1.0]), np.array([2.0, 3.0])])
+    one_element_permutation = quant_stats._permutation_is_degenerate([np.array([1.0]), np.array([2.0, 3.0])])
+    one_element_effect = hedges_g(pd.Series([1.0]), pd.Series([2.0, 3.0]), seed=123, n_boot=100)
+
+    assert one_element_welch is True
+    assert one_element_permutation is True
+    assert pd.isna(one_element_effect["estimate"])
+    assert pd.isna(one_element_effect["ci_low"])
+    assert pd.isna(one_element_effect["ci_high"])
+    assert quant_stats._valid_hedges_inputs(np.array([1.0]), np.array([2.0, 3.0]), 0.5) is False
+    assert quant_stats._valid_hedges_inputs(np.array([1.0, 2.0]), np.array([3.0, 4.0]), 0.5) is True
+
+
+def test_pearson_negative_boundary_keeps_confidence_interval_negative() -> None:
+    result = pearson_with_fisher_ci(pd.Series([1, 2, 3, 4]), pd.Series([4, 3, 2, 1]))
+
+    assert result["correlation"] == -1.0
+    assert np.isfinite(result["ci_low"])
+    assert np.isfinite(result["ci_high"])
+    assert result["ci_high"] < 0
+
+
+def test_spearman_empty_bootstrap_preserves_sample_size_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    original = quant_stats._spearman_bootstrap
+    monkeypatch.setattr(quant_stats, "_spearman_bootstrap", lambda *_args, **_kwargs: np.array([]))
+
+    result = spearman_with_ci(pd.Series([1.0, 2.0, 3.0]), pd.Series([3.0, 2.0, 1.0]), seed=11, n_boot=5)
+
+    assert result["n"] == 3
+    assert result["correlation"] == -1.0
+    assert pd.isna(result["ci_low"])
+    assert pd.isna(result["ci_high"])
+    monkeypatch.setattr(quant_stats, "_spearman_bootstrap", original)
+
+
+def test_benjamini_hochberg_clips_out_of_range_values() -> None:
+    assert benjamini_hochberg([-0.2, 0.4, 1.5]) == [0.0, 0.6000000000000001, 1.0]
+
+
+def test_cronbach_alpha_handles_unit_total_variance_without_collapsing() -> None:
+    result = cronbach_alpha(pd.DataFrame({"a": [0.0, 1.0, 2.0], "b": [0.0, 0.0, 0.0]}))
+
+    assert result == 0.0
 
 
 def test_correlation_fdr_reliability_and_sensitivity_outputs() -> None:

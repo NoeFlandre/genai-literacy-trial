@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import math
+from typing import cast
+
 import numpy as np
 
 import pandas as pd
 import pytest
 
-from genai_literacy_trial.quant_config import QuantConfig
+import genai_literacy_trial.quant_preprocess as quant_preprocess
+from genai_literacy_trial.quant_config import ExpectedInventory, QuantConfig
 from genai_literacy_trial.quant_pipeline import _reliability
 from genai_literacy_trial.quant_preprocess import (
     EXPECTED_GROUP_COUNTS_KEY,
@@ -33,9 +36,13 @@ def test_preprocess_builds_retained_participant_and_assignment_tables() -> None:
     participant = build_participant_table(retained, grades, prompts, config)
     assignment = build_assignment_prompt_table(prompts, participant, config)
 
-    assert summary["pre_responses"] == 6
-    assert summary["post_responses"] == 5
-    assert summary["retained_participants"] == 5
+    assert summary == {
+        "pre_responses": 6,
+        "post_responses": 5,
+        "dropouts": 1,
+        "retained_participants": 5,
+        "retained_survey_rows": 10,
+    }
     assert participant[PARTICIPANT_KEY_COLUMN].is_unique
     assert set(participant["group"]) == {"A", "B", "C"}
     assert len(participant) == 5
@@ -44,6 +51,51 @@ def test_preprocess_builds_retained_participant_and_assignment_tables() -> None:
     assert "GPT" + "1" not in assignment.columns
     assert assignment["assignment"].isin([1, 2, 3, 4]).all()
     assert assignment["prompt_score"].dropna().between(1, 5).all()
+
+
+def test_participant_key_is_a_stable_12_character_public_identifier() -> None:
+    assert participant_key("p05") == "ccb7957f96e5"
+    assert len(participant_key("p05")) == 12
+
+
+def test_participant_and_assignment_tables_keep_exact_public_columns_and_values() -> None:
+    survey, grades, prompts = synthetic_quant_frames()
+    config = QuantConfig.default()
+    retained, _ = prepare_retained_survey(survey, config)
+
+    participant = build_participant_table(retained, grades, prompts, config)
+    assignment = build_assignment_prompt_table(prompts, participant, config)
+
+    assert participant.columns.tolist() == [
+        PARTICIPANT_KEY_COLUMN,
+        "group",
+        "prior_chatgpt_use",
+        "gender",
+        "major",
+        "midterm_points",
+        "final_points",
+        "mean_prompt_score",
+        "scored_assignments",
+    ]
+    p05 = participant.loc[participant[PARTICIPANT_KEY_COLUMN] == participant_key("p05")].iloc[0]
+    assert p05[["group", "prior_chatgpt_use", "gender", "major"]].to_dict() == {
+        "group": "C",
+        "prior_chatgpt_use": "low",
+        "gender": "X",
+        "major": "M1",
+    }
+    assert p05[["midterm_points", "final_points", "mean_prompt_score", "scored_assignments"]].to_dict() == {
+        "midterm_points": 3.7,
+        "final_points": 4.0,
+        "mean_prompt_score": 11.0 / 3.0,
+        "scored_assignments": 3,
+    }
+    assert assignment.columns.tolist() == [PARTICIPANT_KEY_COLUMN, "group", "assignment", "prompt_score"]
+    p05_assignment_2 = assignment.loc[
+        (assignment[PARTICIPANT_KEY_COLUMN] == participant_key("p05")) & (assignment["assignment"] == 2)
+    ]
+    assert len(p05_assignment_2) == 1
+    assert pd.isna(p05_assignment_2["prompt_score"].iloc[0])
 
 
 def test_dropout_prompt_rows_do_not_leak_into_participant_or_assignment_tables() -> None:
@@ -58,6 +110,71 @@ def test_dropout_prompt_rows_do_not_leak_into_participant_or_assignment_tables()
     assert dropout_key not in set(participant[PARTICIPANT_KEY_COLUMN])
     assert dropout_key not in set(assignment[PARTICIPANT_KEY_COLUMN])
     assert len(assignment) == 20
+
+
+def test_assignment_table_accepts_group_x_participant_sources() -> None:
+    survey, grades, prompts = synthetic_quant_frames()
+    config = QuantConfig.default()
+    retained, _ = prepare_retained_survey(survey, config)
+    participant = build_participant_table(retained, grades, prompts, config)
+    group_x_source = participant.rename(columns={"group": "group_x"})
+
+    assignment = build_assignment_prompt_table(prompts, group_x_source, config)
+
+    assert assignment["group"].notna().all()
+    assert set(assignment["group"]) == {"A", "B", "C"}
+
+
+def test_merge_participant_metadata_prefers_grade_values_and_fills_missing_values() -> None:
+    grade_df = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1", "p2"],
+            "group": ["A", "B"],
+            "prior_chatgpt_use": [None, "grade"],
+        }
+    )
+    prior = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1", "p2"],
+            "prior_chatgpt_use": ["survey", "survey"],
+        }
+    )
+
+    participant = quant_preprocess._merge_participant_metadata(
+        grade_df,
+        prior,
+        [PARTICIPANT_KEY_COLUMN, "group"],
+        ["prior_chatgpt_use"],
+    )
+
+    assert participant["prior_chatgpt_use"].tolist() == ["survey", "grade"]
+    assert "prior_chatgpt_use_survey" not in participant.columns
+
+
+def test_merge_participant_metadata_keeps_grade_rows_without_prior_survey() -> None:
+    grade_df = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1", "p2"],
+            "group": ["A", "B"],
+            "prior_chatgpt_use": ["grade", "grade"],
+        }
+    )
+    prior = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1"],
+            "prior_chatgpt_use": ["survey"],
+        }
+    )
+
+    participant = quant_preprocess._merge_participant_metadata(
+        grade_df,
+        prior,
+        [PARTICIPANT_KEY_COLUMN, "group"],
+        ["prior_chatgpt_use"],
+    )
+
+    assert participant[PARTICIPANT_KEY_COLUMN].tolist() == ["p1", "p2"]
+    assert participant["prior_chatgpt_use"].tolist() == ["grade", "grade"]
 
 
 def test_build_participant_table_rejects_duplicate_participant_assignment_rows() -> None:
@@ -76,6 +193,7 @@ def test_build_participant_table_allows_exact_duplicate_grade_rows() -> None:
     config = QuantConfig.default()
 
     duplicate = grades[grades["participant_id"] == "p02"].copy()
+    duplicate.loc[:, "gender"] = "different-but-optional"
     grades = pd.concat([grades, duplicate], ignore_index=True)
 
     retained, _ = prepare_retained_survey(survey, config)
@@ -83,6 +201,57 @@ def test_build_participant_table_allows_exact_duplicate_grade_rows() -> None:
 
     assert participant.shape[0] == 5
     assert participant[PARTICIPANT_KEY_COLUMN].is_unique
+
+
+def test_prepare_grade_rows_accepts_survey_without_precomputed_key() -> None:
+    config = QuantConfig.default()
+    survey = pd.DataFrame({"participant_id": ["p1"]})
+    grades = pd.DataFrame(
+        {
+            "participant_id": ["p1"],
+            "group": ["A"],
+            "midterm_grade": ["B"],
+            "final_grade": ["A"],
+        }
+    )
+
+    prepared, required, _ = quant_preprocess._prepare_grade_rows(survey, grades, config)
+
+    assert prepared[PARTICIPANT_KEY_COLUMN].tolist() == [participant_key("p1")]
+    assert required == [PARTICIPANT_KEY_COLUMN, "group", "midterm_grade", "final_grade"]
+
+
+def test_map_grade_rejects_unmapped_values_with_column_name() -> None:
+    with pytest.raises(ValueError) as exc_info:
+        quant_preprocess._map_grade(pd.Series(["Z"]), QuantConfig.default(), "final_grade")
+
+    assert str(exc_info.value) == "Unmapped letter grades in final_grade: ['Z']"
+
+
+def test_map_configured_scalar_does_not_map_missing_values_to_literal_text() -> None:
+    assert quant_preprocess._map_configured_scalar(np.nan, {"XXXX": 9.0}) is None
+
+
+def test_validate_grade_key_consistency_keeps_missing_keys_and_all_conflicts() -> None:
+    grade_df = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: [None, None],
+            "group": ["A", "B"],
+            "midterm_grade": ["A", "B"],
+        }
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        quant_preprocess._validate_grade_key_consistency(
+            grade_df,
+            PARTICIPANT_KEY_COLUMN,
+            ["group", "midterm_grade"],
+        )
+
+    assert str(exc_info.value) == (
+        "Conflicting grade rows for participant_key in: nan -> group: ['A', 'B'], "
+        "midterm_grade: ['A', 'B']"
+    )
 
 
 def test_build_participant_table_rejects_conflicting_duplicate_grade_rows() -> None:
@@ -137,6 +306,33 @@ def test_likert_scoring_accepts_text_and_numeric_strings_and_reverse_codes() -> 
     assert math.isclose(pre_b["perceived_usefulness"], 3.5)
     assert math.isclose(pre_a["locus_of_control"], 1.5)
     assert math.isclose(pre_b["locus_of_control"], (5.0 + 4.0) / 2.0)
+
+
+def test_prior_survey_rows_select_only_configured_pre_phase() -> None:
+    config = QuantConfig.default()
+    survey = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            "phase": [config.pre_label, config.post_label],
+            "prior_chatgpt_use": ["pre-value", "post-value"],
+        }
+    )
+
+    prior = quant_preprocess._prior_survey_rows(survey, config)
+
+    assert prior["prior_chatgpt_use"].tolist() == ["pre-value"]
+
+
+def test_dimension_composite_reports_zero_items_when_dimension_is_absent() -> None:
+    result = quant_preprocess._dimension_composite(
+        pd.DataFrame({"participant_id": ["p1"]}),
+        "missing_dimension",
+        ["missing_item"],
+        QuantConfig.default(),
+    )
+
+    assert pd.isna(result["missing_dimension"])
+    assert result["missing_dimension_items_present"] == 0
 
 
 def test_prior_chatgpt_use_scores_agree_with_mapping_table_for_mapped_and_numeric_values() -> None:
@@ -266,6 +462,36 @@ def test_inventory_validation_fails_on_bad_units_and_values() -> None:
         validate_analysis_inventory(participant, bad_prompt, retained, config)
 
 
+def test_inventory_validation_error_messages_are_stable() -> None:
+    config = QuantConfig.default()
+    participant = pd.DataFrame({PARTICIPANT_KEY_COLUMN: ["p1"], "group": ["A"]})
+    assignment = pd.DataFrame({"assignment": [9], "prompt_score": [1.0]})
+    retained = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1", "p1"],
+            "participant_id": ["p1", "p1"],
+            "phase": [config.pre_label, config.post_label],
+        }
+    )
+
+    with pytest.raises(ValueError) as assignment_error:
+        validate_analysis_inventory(participant, assignment, retained, config)
+    assert str(assignment_error.value) == "Invalid assignment values outside configured assignments"
+
+    assignment["assignment"] = 1
+    assignment["prompt_score"] = 6
+    with pytest.raises(ValueError) as prompt_error:
+        validate_analysis_inventory(participant, assignment, retained, config)
+    assert str(prompt_error.value) == "Invalid prompt score outside 1-5"
+
+
+def test_validate_no_transcripts_rejects_transcript_like_columns() -> None:
+    with pytest.raises(ValueError) as exc_info:
+        quant_preprocess._validate_no_transcripts(pd.DataFrame(columns=["participant_key", "user1"]))
+
+    assert str(exc_info.value) == "prompt table contains transcript columns after preprocessing"
+
+
 def test_inventory_validation_requires_exactly_one_pre_and_post_row() -> None:
     survey, grades, prompts = synthetic_quant_frames()
     config = QuantConfig.default()
@@ -276,6 +502,34 @@ def test_inventory_validation_requires_exactly_one_pre_and_post_row() -> None:
 
     with pytest.raises(ValueError, match="exactly one pre and one post"):
         validate_analysis_inventory(participant, assignment, retained, config)
+
+
+def test_phase_inventory_rejects_participants_missing_one_phase() -> None:
+    config = QuantConfig.default()
+    retained = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: [participant_key("p1"), participant_key("p2")],
+            "participant_id": ["p1", "p2"],
+            "phase": [config.pre_label, config.post_label],
+        }
+    )
+
+    with pytest.raises(ValueError, match="exactly one pre and one post"):
+        quant_preprocess._validate_phase_inventory(retained, config)
+
+
+def test_phase_inventory_rejects_a_missing_phase_column() -> None:
+    config = QuantConfig.default()
+    retained = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: [participant_key("p1")],
+            "participant_id": ["p1"],
+            "phase": [config.pre_label],
+        }
+    )
+
+    with pytest.raises(ValueError, match="exactly one pre and one post"):
+        quant_preprocess._validate_phase_inventory(retained, config)
 
 
 def test_inventory_validation_checks_expected_group_counts() -> None:
@@ -294,11 +548,86 @@ def test_inventory_validation_checks_expected_group_counts() -> None:
     )
 
     assert {"group_count_A", "group_count_B", "group_count_C"} <= set(inventory["metric"])
+    expected_rows = inventory.set_index("metric")["expected"]
+    assert expected_rows["group_count_A"] == 2
+    assert inventory.loc[inventory["metric"] == "group_count_A", "status"].iloc[0] == "pass"
+
+
+def test_observed_inventory_preserves_all_public_metric_names_and_values() -> None:
+    participant = pd.DataFrame({"group": ["B", "A", "A"]})
+    assignment = pd.DataFrame({"prompt_score": [1.0, np.nan, 3.0]})
+    retained = pd.DataFrame(index=range(4))
+
+    assert quant_preprocess._observed_inventory(participant, assignment, retained) == {
+        "retained_participants": 3,
+        "retained_survey_rows": 4,
+        "prompt_assignment_rows": 3,
+        "scored_prompt_observations": 2,
+        "missing_prompt_scores": 1,
+        "group_count_A": 2,
+        "group_count_B": 1,
+    }
+
+
+def test_expected_inventory_value_supports_direct_and_group_metrics() -> None:
+    expected = cast(ExpectedInventory, {"retained_participants": 3, "group_counts": {"A": 2}})
+
+    assert quant_preprocess._expected_inventory_value("retained_participants", expected) == 3
+    assert quant_preprocess._expected_inventory_value("group_count_A", expected) == 2
+    assert quant_preprocess._expected_inventory_value("group_count_B", expected) is None
 
 
 def test_group_count_inventory_contract_names_are_centralized() -> None:
     assert EXPECTED_GROUP_COUNTS_KEY == "group_counts"
     assert GROUP_COUNT_METRIC_PREFIX == "group_count_"
+
+
+@pytest.mark.parametrize("columns", [("participant_id",), ("assignment",)])
+def test_prompt_assignment_uniqueness_ignores_incomplete_input_schema(columns: tuple[str, ...]) -> None:
+    prompts = pd.DataFrame({column: ["value"] for column in columns})
+
+    quant_preprocess._validate_prompt_assignment_uniqueness(prompts, QuantConfig.default())
+
+
+def test_prompt_assignment_uniqueness_uses_participant_and_assignment_keys() -> None:
+    prompts = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            "assignment": [1, 1],
+            "prompt_score": [1.0, 2.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="Duplicate prompt rows"):
+        quant_preprocess._validate_prompt_assignment_uniqueness(prompts, QuantConfig.default())
+
+
+def test_prompt_assignment_uniqueness_reports_only_first_three_duplicate_examples() -> None:
+    prompts = pd.DataFrame(
+        {
+            "participant_id": [f"p{i}" for i in range(4) for _ in range(2)],
+            "assignment": [1] * 8,
+            "prompt_score": list(range(8)),
+        }
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        quant_preprocess._validate_prompt_assignment_uniqueness(prompts, QuantConfig.default())
+    message = str(exc_info.value)
+    assert message.count("assignment 1") == 3
+    assert participant_key("p3") not in message
+
+
+def test_assignment_table_keeps_existing_group_when_group_x_is_also_present() -> None:
+    survey, grades, prompts = synthetic_quant_frames()
+    config = QuantConfig.default()
+    retained, _ = prepare_retained_survey(survey, config)
+    participant = build_participant_table(retained, grades, prompts, config)
+    participant["group_x"] = "wrong"
+
+    assignment = build_assignment_prompt_table(prompts, participant, config)
+
+    assert set(assignment["group"]) == {"A", "B", "C"}
 
 
 def test_participant_key_column_name_is_centralized() -> None:
@@ -318,6 +647,64 @@ def test_prior_use_mapping_table_flags_unmapped_categories() -> None:
     unmapped = mapping.loc[mapping["prior_chatgpt_use"] == "unknown category"].iloc[0]
     assert unmapped["mapped_status"] == "unmapped"
     assert pd.isna(unmapped["mapped_score"])
+
+
+def test_prior_use_mapping_table_normalizes_missing_categories() -> None:
+    config = QuantConfig.default()
+    retained_survey = pd.DataFrame(
+        {
+            "participant_id": ["p1"],
+            "phase": [config.pre_label],
+            "prior_chatgpt_use": [None],
+        }
+    )
+
+    mapping = prior_use_mapping_table(retained_survey, config)
+
+    assert mapping.to_dict("records") == [
+        {"prior_chatgpt_use": "", "n": 1, "mapped_score": None, "mapped_status": "unmapped"}
+    ]
+
+
+def test_prior_use_mapping_table_suppresses_only_counts_below_threshold() -> None:
+    config = QuantConfig.default()
+    retained_survey = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p2", "p3", "p4"],
+            "phase": [config.pre_label] * 4,
+            "prior_chatgpt_use": ["low", "low", "high", "unknown"],
+        }
+    )
+
+    mapping = prior_use_mapping_table(retained_survey, config, min_count=2)
+
+    records = mapping[["prior_chatgpt_use", "n", "mapped_score", "mapped_status"]].to_dict("records")
+    assert records[:2] == [
+        {"prior_chatgpt_use": "high", "n": "suppressed", "mapped_score": 5.0, "mapped_status": "mapped"},
+        {"prior_chatgpt_use": "low", "n": 2, "mapped_score": 1.0, "mapped_status": "mapped"},
+    ]
+    assert records[2]["prior_chatgpt_use"] == "unknown"
+    assert records[2]["n"] == "suppressed"
+    assert pd.isna(records[2]["mapped_score"])
+    assert records[2]["mapped_status"] == "unmapped"
+
+
+def test_inventory_row_reports_pass_and_rejects_mismatch() -> None:
+    assert quant_preprocess._inventory_row("group_count_A", 2, {"group_counts": {"A": 2}}) == {
+        "metric": "group_count_A",
+        "observed": 2,
+        "expected": 2,
+        "status": "pass",
+    }
+    assert quant_preprocess._inventory_row("unconfigured_metric", 2, None) == {
+        "metric": "unconfigured_metric",
+        "observed": 2,
+        "expected": None,
+        "status": "pass",
+    }
+
+    with pytest.raises(ValueError, match="Inventory mismatch for group_count_A: observed 2, expected 3"):
+        quant_preprocess._inventory_row("group_count_A", 2, {"group_counts": {"A": 3}})
 
 
 def test_small_cell_suppression_collapses_and_hides_exact_counts() -> None:
