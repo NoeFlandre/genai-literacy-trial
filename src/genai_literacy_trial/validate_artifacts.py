@@ -105,7 +105,7 @@ def _validate_csv(path: Path, required_columns: Sequence[str]) -> ValidationIssu
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        while chunk := stream.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
 

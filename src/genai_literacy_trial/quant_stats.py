@@ -192,7 +192,9 @@ def spearman_with_ci(
     frame = pd.DataFrame({"x": x, "y": y}).dropna()
     if len(frame) < 3:
         return {"correlation": math.nan, "p_value": math.nan, "ci_low": math.nan, "ci_high": math.nan, "n": len(frame)}
-    if np.nanvar(frame["x"], ddof=0) == 0 or np.nanvar(frame["y"], ddof=0) == 0:
+    x_variance = np.nanvar(frame["x"], ddof=0)
+    y_variance = np.nanvar(frame["y"], ddof=0)
+    if x_variance == 0 or y_variance == 0:
         return {"correlation": math.nan, "p_value": math.nan, "ci_low": math.nan, "ci_high": math.nan, "n": len(frame)}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=stats.ConstantInputWarning)

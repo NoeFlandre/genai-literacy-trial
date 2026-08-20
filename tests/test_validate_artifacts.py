@@ -239,6 +239,10 @@ def test_is_sha256_accepts_only_lowercase_64_character_strings(value: object, ex
     assert validate_artifacts._is_sha256(value) is expected
 
 
+def test_is_sha256_rejects_uppercase_non_hex_characters() -> None:
+    assert validate_artifacts._is_sha256("X" * 64) is False
+
+
 def test_write_manifest_serializes_stable_sorted_indented_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     input_dir, config, expected_inventory, public_output_dir, output = _write_validation_fixture(tmp_path)
     output.write_text("# report\n", encoding="utf-8")
@@ -425,6 +429,25 @@ def test_write_manifest_rejects_missing_required_files(tmp_path: Path, monkeypat
             expected_inventory=expected_inventory,
             public_output_dir=public_output_dir,
         )
+
+
+def test_write_manifest_lists_all_missing_required_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    input_dir, config, expected_inventory, public_output_dir, _ = _write_validation_fixture(tmp_path)
+    monkeypatch.setattr(validate_artifacts, "_required_outputs", lambda _mode: ("missing-a.md", "missing-b.md"))
+    missing_a = public_output_dir / "missing-a.md"
+    missing_b = public_output_dir / "missing-b.md"
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        validate_artifacts.write_manifest(
+            path=tmp_path / "manifest.json",
+            mode="small",
+            input_dir=input_dir,
+            config=config,
+            expected_inventory=expected_inventory,
+            public_output_dir=public_output_dir,
+        )
+
+    assert str(exc_info.value) == f"Cannot write manifest; required files are missing: {missing_a}, {missing_b}"
 
 
 def test_validate_manifest_rejects_unexpected_top_level_fields(tmp_path: Path) -> None:

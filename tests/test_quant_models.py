@@ -178,6 +178,41 @@ def test_model_diagnostics_counts_missing_named_survey_composite() -> None:
     assert result["lost_survey_composite"] == 1
 
 
+def test_model_diagnostics_uses_the_named_composite_column() -> None:
+    frame = pd.DataFrame({"trust": [1.0, 2.0], "XXXX": [None, 2.0]})
+
+    result = quant_models._model_diagnostics(frame, "survey_model", ["trust"], "trust")
+
+    assert result["lost_survey_composite"] == 0
+
+
+def test_model_diagnostics_treats_an_empty_composite_name_as_missing() -> None:
+    frame = pd.DataFrame({"": [1.0, None], "XXXX": [1.0, 2.0]})
+
+    result = quant_models._model_diagnostics(frame, "survey_model", [], "")
+
+    assert result["lost_survey_composite"] == 1
+
+
+def test_fit_ols_hc3_passes_the_explicit_covariance_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    class FakeResult:
+        pass
+
+    class FakeModel:
+        def fit(self, **kwargs: object) -> FakeResult:
+            calls.append(kwargs)
+            return FakeResult()
+
+    monkeypatch.setattr(quant_models.smf, "ols", lambda *_args, **_kwargs: FakeModel())
+
+    result = quant_models._fit_ols_hc3("y ~ x", pd.DataFrame({"x": [1.0], "y": [2.0]}))
+
+    assert isinstance(result, FakeResult)
+    assert calls == [{"cov_type": "HC3"}]
+
+
 def test_fit_prompt_trajectory_model_reports_clustered_ols_fallback(monkeypatch) -> None:
     observed_assignments: list[object] = []
     assignment = pd.DataFrame(
@@ -266,6 +301,40 @@ def test_fit_prompt_trajectory_treats_missing_converged_as_converged(monkeypatch
 
     assert summary.method == "mixedlm"
     assert summary.tidy.loc[0, "model"] == "prompt_trajectory_mixedlm"
+
+
+def test_fit_prompt_trajectory_mixed_model_preserves_tidy_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    assignment = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1", "p1", "p2", "p2"],
+            "group": ["A", "A", "B", "B"],
+            "assignment": [1, 2, 1, 2],
+            "prompt_score": [2.0, 3.0, 4.0, 5.0],
+        }
+    )
+
+    class FakeResult:
+        converged = True
+
+    class FakeModel:
+        @staticmethod
+        def fit(*, reml: bool, disp: bool) -> FakeResult:
+            return FakeResult()
+
+    tidy_calls: list[tuple[object, object, object]] = []
+
+    def fake_tidy(result: object, model_name: object, n: object) -> pd.DataFrame:
+        tidy_calls.append((result, model_name, n))
+        return pd.DataFrame({"model": [model_name], "n": [n]})
+
+    monkeypatch.setattr(quant_models.smf, "mixedlm", lambda *_args, **_kwargs: FakeModel())
+    monkeypatch.setattr(quant_models, "_tidy_result", fake_tidy)
+
+    summary = fit_prompt_trajectory_model(assignment)
+
+    assert summary.method == "mixedlm"
+    assert tidy_calls[0][0].__class__ is FakeResult
+    assert tidy_calls[0][1:] == ("prompt_trajectory_mixedlm", 4)
 
 
 def test_model_diagnostics_reports_each_required_missingness_dimension() -> None:
@@ -417,6 +486,47 @@ def test_learning_outcome_model_schema_and_stable_values() -> None:
     assert not math.isclose(float(midterm["estimate"]), float(midterm["std_beta"]))
 
 
+def test_learning_outcome_models_preserve_sample_and_standardization_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
+    participant, _, _ = _prepared()
+    complete_case_calls: list[list[str] | None] = []
+    spearman_calls: list[int | None] = []
+    effect_calls: list[tuple[str, str, bool | None, bool | None]] = []
+    original_complete_cases = quant_models._complete_cases
+
+    def recording_complete_cases(frame: pd.DataFrame, required: list[str]) -> pd.DataFrame:
+        complete_case_calls.append(required)
+        return original_complete_cases(frame, required)
+
+    def fake_spearman(_x: pd.Series, _y: pd.Series, *, n_boot: int = 10000):
+        spearman_calls.append(n_boot)
+        return {"correlation": 0.0, "p_value": 1.0, "ci_low": 0.0, "ci_high": 0.0, "n": len(participant)}
+
+    def recording_effect(
+        tidy: pd.DataFrame,
+        _work: pd.DataFrame,
+        term: str,
+        outcome: str,
+        *,
+        from_standardized_predictor: bool | None,
+        include_ci: bool | None,
+    ) -> pd.DataFrame:
+        effect_calls.append((term, outcome, from_standardized_predictor, include_ci))
+        return tidy
+
+    monkeypatch.setattr(quant_models, "_complete_cases", recording_complete_cases)
+    monkeypatch.setattr(quant_models, "spearman_with_ci", fake_spearman)
+    monkeypatch.setattr(quant_models, "_add_standardized_effect", recording_effect)
+
+    learning_outcome_models(participant)
+
+    assert complete_case_calls == [["mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"]]
+    assert spearman_calls == [1000, 1000]
+    assert effect_calls == [
+        ("midterm_points", "mean_prompt_score", False, False),
+        ("prior_chatgpt_use_score", "mean_prompt_score", False, False),
+    ]
+
+
 def test_calibration_and_perceived_usefulness_models_apply_fdr_and_report_n() -> None:
     participant, _, _ = _prepared()
 
@@ -433,6 +543,7 @@ def test_mean_difference_ci_has_stable_seeded_and_empty_contracts() -> None:
     result = quant_models._mean_difference_ci(pd.Series([1.0, 2.0, 3.0]), pd.Series([2.0, 4.0]), seed=123, n_boot=500)
     repeat = quant_models._mean_difference_ci(pd.Series([1.0, 2.0, 3.0]), pd.Series([2.0, 4.0]), seed=123, n_boot=500)
     empty = quant_models._mean_difference_ci(pd.Series(dtype=float), pd.Series([1.0]), seed=123, n_boot=10)
+    empty_other = quant_models._mean_difference_ci(pd.Series([1.0]), pd.Series(dtype=float), seed=123, n_boot=10)
 
     assert inspect.signature(quant_models._mean_difference_ci).parameters["n_boot"].default == 1000
     assert result == {
@@ -445,6 +556,48 @@ def test_mean_difference_ci_has_stable_seeded_and_empty_contracts() -> None:
     assert pd.isna(empty["mean_difference"])
     assert pd.isna(empty["mean_difference_ci_low"])
     assert pd.isna(empty["mean_difference_ci_high"])
+    assert pd.isna(empty_other["mean_difference"])
+    assert pd.isna(empty_other["mean_difference_ci_low"])
+    assert pd.isna(empty_other["mean_difference_ci_high"])
+
+
+def test_mean_difference_ci_coerces_numeric_string_inputs() -> None:
+    result = quant_models._mean_difference_ci(pd.Series(["1", "2"]), pd.Series(["2", "3"]), seed=123, n_boot=10)
+
+    assert result["mean_difference"] == -1.0
+    assert np.isfinite(result["mean_difference_ci_low"])
+    assert np.isfinite(result["mean_difference_ci_high"])
+
+
+def test_mean_difference_ci_uses_the_default_bootstrap_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[int, int]] = []
+
+    class FakeRng:
+        def choice(self, _values: np.ndarray, *, size: tuple[int, int], replace: bool) -> np.ndarray:
+            calls.append(size)
+            assert replace is True
+            return np.ones(size)
+
+    monkeypatch.setattr(quant_models.np.random, "default_rng", lambda _seed: FakeRng())
+
+    quant_models._mean_difference_ci(pd.Series([1.0, 2.0]), pd.Series([2.0, 3.0]))
+
+    assert calls == [(1000, 2), (1000, 2)]
+
+
+def test_mean_difference_ci_uses_the_deterministic_default_seed(monkeypatch: pytest.MonkeyPatch) -> None:
+    seeds: list[int | None] = []
+    original_default_rng = quant_models.np.random.default_rng
+
+    def recording_default_rng(seed: int | None):
+        seeds.append(seed)
+        return original_default_rng(seed)
+
+    monkeypatch.setattr(quant_models.np.random, "default_rng", recording_default_rng)
+
+    quant_models._mean_difference_ci(pd.Series([1.0, 2.0]), pd.Series([2.0, 3.0]), n_boot=3)
+
+    assert seeds == [quant_models.DEFAULT_SEED]
 
 
 def test_contrast_rows_handles_singleton_comparison_groups() -> None:
@@ -462,11 +615,25 @@ def test_contrast_rows_handles_singleton_comparison_groups() -> None:
     assert by_contrast["C vs B"]["n"] == 3
 
 
+def test_contrast_rows_returns_nan_for_an_empty_comparison_group() -> None:
+    frame = pd.DataFrame(
+        {
+            "group": ["C", "C", "A", "A"],
+            "mean_prompt_score": [4.0, 5.0, 1.0, 2.0],
+        }
+    )
+
+    rows = {row["contrast"]: row for row in quant_models._contrast_rows(frame, "mean_prompt_score")}
+
+    assert pd.isna(rows["C vs B"]["p_value"])
+    assert pd.isna(rows["B vs A"]["p_value"])
+
+
 def test_contrast_rows_uses_fixed_bootstrap_budget(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[int | None] = []
+    calls: list[tuple[int | None, int, int]] = []
 
     def fake_hedges(_a: pd.Series, _b: pd.Series, *, n_boot: int = 10000):
-        calls.append(n_boot)
+        calls.append((n_boot, len(_a), len(_b)))
         return {"estimate": 0.0, "ci_low": 0.0, "ci_high": 0.0}
 
     monkeypatch.setattr(quant_models, "hedges_g", fake_hedges)
@@ -485,7 +652,7 @@ def test_contrast_rows_uses_fixed_bootstrap_budget(monkeypatch: pytest.MonkeyPat
         "mean_prompt_score",
     )
 
-    assert calls == [1000, 1000, 1000, 1000]
+    assert calls == [(1000, 1, 1), (1000, 1, 1), (1000, 1, 1), (1000, 1, 2)]
 
 
 def test_perceived_usefulness_and_calibration_model_outputs_stable_and_schema() -> None:
@@ -542,17 +709,64 @@ def test_perceived_usefulness_and_calibration_model_outputs_stable_and_schema() 
     assert math.isclose(float(trust["std_beta"]), 0.0, abs_tol=1e-12)
     assert not math.isclose(float(final_points["estimate"]), float(final_points["std_beta"]))
     assert not math.isclose(float(grade_change["estimate"]), float(grade_change["std_beta"]))
+    assert calibration["model"].tolist() == list(CALIBRATION_DIMENSIONS)
+    assert calibration.index.tolist() == list(range(len(calibration)))
+    assert usefulness.index.tolist() == list(range(len(usefulness)))
+    assert calibration["fdr_p_value"].notna().all()
 
 
 def test_standardized_betas_use_complete_case_model_sample() -> None:
     participant, _, _ = _prepared()
     participant.loc[0, "prior_chatgpt_use_score"] = None
+    participant.loc[1, "trust"] = None
 
     calibration = calibration_models(participant)
     usefulness = perceived_usefulness_models(participant)
 
-    assert calibration["n"].min() == len(participant) - 1
+    assert calibration["n"].min() == len(participant) - 2
+    assert calibration.loc[calibration["dimension"] == "trust", "n"].min() == len(participant) - 2
+    assert calibration.loc[calibration["dimension"] == "perceived_usefulness", "n"].min() == len(participant) - 1
     assert usefulness["n"].min() == len(participant) - 1
+
+
+def test_perceived_usefulness_models_preserve_model_specific_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    participant, _, _ = _prepared()
+    complete_case_calls: list[tuple[list[str] | None, pd.Series]] = []
+    effect_calls: list[tuple[str, str, bool | None, bool | None]] = []
+    original_complete_cases = quant_models._complete_cases
+
+    def recording_complete_cases(frame: pd.DataFrame, required: list[str]) -> pd.DataFrame:
+        complete_case_calls.append((required, frame["grade_change"].copy()))
+        return original_complete_cases(frame, required)
+
+    def recording_effect(
+        tidy: pd.DataFrame,
+        _work: pd.DataFrame,
+        term: str,
+        outcome: str,
+        *,
+        from_standardized_predictor: bool | None,
+        include_ci: bool | None,
+    ) -> pd.DataFrame:
+        effect_calls.append((term, outcome, from_standardized_predictor, include_ci))
+        return tidy
+
+    monkeypatch.setattr(quant_models, "_complete_cases", recording_complete_cases)
+    monkeypatch.setattr(quant_models, "_add_standardized_effect", recording_effect)
+
+    perceived_usefulness_models(participant)
+
+    expected_change = participant["final_points"] - participant["midterm_points"]
+    assert [required for required, _ in complete_case_calls] == [
+        ["perceived_usefulness", "prior_chatgpt_use_score", "group", "final_points", "midterm_points"],
+        ["perceived_usefulness", "prior_chatgpt_use_score", "group", "final_points", "grade_change"],
+    ]
+    for _, observed_change in complete_case_calls:
+        pd.testing.assert_series_equal(observed_change, expected_change, check_names=False)
+    assert effect_calls == [
+        ("perceived_usefulness_z", "final_points", True, True),
+        ("perceived_usefulness_z", "grade_change", True, True),
+    ]
 
 
 def test_training_contrasts_report_p_values() -> None:
@@ -570,6 +784,7 @@ def test_prompt_missingness_sensitivity_outputs_min3_and_all4() -> None:
 
     assert {"scored_assignment_distribution", "min3_assignments", "all4_assignments"} <= set(sensitivity)
     assert sensitivity["all4_assignments"]["status"].iloc[0] == "not_run_small_n"
+    assert sensitivity["all4_assignments"]["model"].iloc[0] == "all4_scored_assignments"
 
 
 def test_prompt_missingness_sensitivity_schema_and_n() -> None:
@@ -615,6 +830,72 @@ def test_prompt_missingness_sensitivity_runs_all4_at_threshold_and_has_stable_de
     small = prompt_missingness_sensitivity(tiny, min_all4_n=2)
     assert small["min3_assignments"]["status"].iloc[0] == "not_run_small_n"
     assert small["min3_assignments"]["n"].iloc[0] == 2
+    assert small["min3_assignments"]["model"].iloc[0] == "min3_scored_assignments"
+
+
+def test_prompt_missingness_sensitivity_keeps_missing_distribution_keys() -> None:
+    participant, _, _ = _prepared()
+    participant.loc[participant.index[0], "group"] = None
+
+    sensitivity = prompt_missingness_sensitivity(participant, min_all4_n=99)
+
+    assert sensitivity["scored_assignment_distribution"]["group"].isna().any()
+
+
+def test_prompt_missingness_sensitivity_preserves_small_n_and_formula_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
+    participant, _, _ = _prepared()
+    participant = participant.iloc[:3].copy()
+    participant["scored_assignments"] = [4, 4, 4]
+    participant["prior_chatgpt_use_score"] = participant["prior_chatgpt_use_score"].fillna(1.0)
+    participant["irrelevant_missing_column"] = None
+    formulas: list[str] = []
+
+    class FakeResult:
+        nobs = 3
+
+    monkeypatch.setattr(
+        quant_models,
+        "_fit_ols_hc3",
+        lambda formula, _data: formulas.append(formula) or FakeResult(),
+    )
+    monkeypatch.setattr(
+        quant_models,
+        "_tidy_result",
+        lambda _result, model_name, n: pd.DataFrame({"model": [model_name], "n": [n]}),
+    )
+
+    sensitivity = prompt_missingness_sensitivity(participant, min_all4_n=3)
+
+    assert sensitivity["min3_assignments"]["status"].iloc[0] == "run"
+    assert sensitivity["min3_assignments"]["n"].iloc[0] == 3
+    assert sensitivity["min3_assignments"]["model"].iloc[0] == "min3_scored_assignments"
+    assert sensitivity["all4_assignments"]["status"].iloc[0] == "run"
+    assert sensitivity["all4_assignments"]["model"].iloc[0] == "all4_scored_assignments"
+    assert formulas == [
+        "mean_prompt_score ~ midterm_points + group + prior_chatgpt_use_score + scored_assignments",
+        "mean_prompt_score ~ midterm_points + group + prior_chatgpt_use_score",
+    ]
+
+
+def test_prompt_missingness_sensitivity_uses_the_default_all4_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
+    participant, _, _ = _prepared()
+    participant = pd.concat([participant.iloc[[0]]] * 30, ignore_index=True)
+    participant["scored_assignments"] = 4
+
+    class FakeResult:
+        nobs = 30
+
+    monkeypatch.setattr(quant_models, "_fit_ols_hc3", lambda *_args, **_kwargs: FakeResult())
+    monkeypatch.setattr(
+        quant_models,
+        "_tidy_result",
+        lambda _result, model_name, n: pd.DataFrame({"model": [model_name], "n": [n]}),
+    )
+
+    sensitivity = prompt_missingness_sensitivity(participant)
+
+    assert sensitivity["all4_assignments"]["status"].iloc[0] == "run"
+    assert sensitivity["all4_assignments"]["n"].iloc[0] == 30
 
 
 def test_learning_prediction_table_uses_adjusted_model_ci() -> None:
@@ -658,6 +939,44 @@ def test_model_based_learning_prediction_table_schema_and_values() -> None:
     assert float(prediction["ci_low"].iloc[0]) < float(prediction["predicted_mean_prompt_score"].iloc[0]) < float(prediction["ci_high"].iloc[0])
 
 
+def test_model_based_learning_prediction_uses_complete_cases_and_unique_group_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    participant = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1", "p2", "p3", "p4"],
+            "group": ["A", "A", "A", "B"],
+            "mean_prompt_score": [1.0, 2.0, 3.0, 4.0],
+            "midterm_points": [1.0, 1.0, 2.0, 2.0],
+            "prior_chatgpt_use": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    complete_case_calls: list[list[str] | None] = []
+    references: list[pd.DataFrame] = []
+    original_complete_cases = quant_models._complete_cases
+
+    def recording_complete_cases(frame: pd.DataFrame, required: list[str]) -> pd.DataFrame:
+        complete_case_calls.append(required)
+        return original_complete_cases(frame, required)
+
+    class FakePrediction:
+        def summary_frame(self, *, alpha: float) -> pd.DataFrame:
+            assert alpha == 0.05
+            return pd.DataFrame({"mean": np.zeros(30), "mean_ci_lower": np.full(30, -1.0), "mean_ci_upper": np.ones(30)})
+
+    class FakeResult:
+        def get_prediction(self, reference: pd.DataFrame) -> FakePrediction:
+            references.append(reference)
+            return FakePrediction()
+
+    monkeypatch.setattr(quant_models, "_complete_cases", recording_complete_cases)
+    monkeypatch.setattr(quant_models, "_fit_ols_hc3", lambda *_args, **_kwargs: FakeResult())
+
+    prediction = model_based_learning_prediction_table(participant)
+
+    assert prediction.shape == (30, 4)
+    assert complete_case_calls == [["mean_prompt_score", "midterm_points", "group", "prior_chatgpt_use_score"]]
+    assert references[0]["group"].iloc[0] == "A"
+
+
 def test_complete_case_diagnostics_report_marginal_loss() -> None:
     participant, _, _ = _prepared()
     participant.loc[0, "prior_chatgpt_use_score"] = None
@@ -668,6 +987,60 @@ def test_complete_case_diagnostics_report_marginal_loss() -> None:
     assert set(diagnostics["loss_type"]) == {"marginal_non_additive"}
     assert diagnostics["lost_prior_chatgpt_use_score"].max() == 1
     assert diagnostics["final_n"].min() == len(participant) - 1
+
+
+def test_complete_case_diagnostics_preserves_named_survey_composites() -> None:
+    participant = pd.DataFrame(
+        {
+            "mean_prompt_score": [1.0, 2.0],
+            "midterm_points": [2.0, 3.0],
+            "final_points": [3.0, 4.0],
+            "group": ["A", "A"],
+            "prior_chatgpt_use_score": [1.0, 1.0],
+            "perceived_usefulness": [1.0, None],
+            "trust": [None, 2.0],
+            "XXXX": [None, 2.0],
+        }
+    )
+
+    diagnostics = complete_case_diagnostics(participant)
+    final_points = diagnostics.loc[diagnostics["model"] == "perceived_usefulness_final_points"].iloc[0]
+    grade_change = diagnostics.loc[diagnostics["model"] == "perceived_usefulness_grade_change"].iloc[0]
+    calibration = diagnostics.loc[diagnostics["model"] == "calibration_trust"].iloc[0]
+
+    assert final_points["lost_survey_composite"] == 1
+    assert grade_change["lost_survey_composite"] == 1
+    assert calibration["lost_survey_composite"] == 1
+
+
+def test_complete_case_diagnostics_computes_grade_change_by_subtraction(monkeypatch: pytest.MonkeyPatch) -> None:
+    participant = pd.DataFrame(
+        {
+            "mean_prompt_score": [1.0, 2.0],
+            "midterm_points": [4.0, 5.0],
+            "final_points": [10.0, 13.0],
+            "group": ["A", "A"],
+            "prior_chatgpt_use_score": [1.0, 1.0],
+            "perceived_usefulness": [1.0, 2.0],
+        }
+    )
+    observed: list[float] = []
+
+    def fake_diagnostics(
+        frame: pd.DataFrame,
+        model: str,
+        _required: list[str],
+        _survey: str | None = None,
+    ) -> dict[str, object]:
+        if model == "perceived_usefulness_grade_change":
+            observed.extend(frame["grade_change"].tolist())
+        return {"model": model}
+
+    monkeypatch.setattr(quant_models, "_model_diagnostics", fake_diagnostics)
+
+    quant_models.complete_case_diagnostics(participant)
+
+    assert observed == [6.0, 8.0]
 
 
 def test_contrast_table_separates_mean_and_effect_size_cis() -> None:
@@ -709,6 +1082,38 @@ def test_participant_level_training_effect_columns_stable() -> None:
     }
     assert training["tests"]["test"].tolist() == ["welch_anova", "kruskal_wallis", "permutation_anova"]
     assert training["summary"]["metric"].tolist() == ["mean_prompt_score"] * len(training["summary"])
+    assert training["summary"].columns.tolist() == [
+        "metric",
+        "group",
+        "n",
+        "mean",
+        "sd",
+        "ci_low",
+        "ci_high",
+        "n_participants",
+    ]
+
+
+def test_participant_level_training_effect_uses_fixed_permutation_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int | None] = []
+
+    monkeypatch.setattr(
+        quant_models,
+        "group_summary_ci",
+        lambda *_args: pd.DataFrame({"group": ["A"], "n": [1], "mean": [1.0], "sd": [np.nan], "ci_low": [1.0], "ci_high": [1.0]}),
+    )
+    monkeypatch.setattr(quant_models, "welch_anova", lambda *_args: {"statistic": 1.0, "p_value": 0.5})
+    monkeypatch.setattr(quant_models, "kruskal_test", lambda *_args: {"statistic": 1.0, "p_value": 0.5})
+    monkeypatch.setattr(
+        quant_models,
+        "permutation_anova",
+        lambda *_args, n_perm=2000: calls.append(n_perm) or {"statistic": 1.0, "p_value": 0.5},
+    )
+    monkeypatch.setattr(quant_models, "_contrast_rows", lambda *_args: [])
+
+    quant_models.participant_level_training_effect(pd.DataFrame({"group": ["A"], "mean_prompt_score": [1.0]}))
+
+    assert calls == [1000]
 
 
 def test_participant_level_training_effect_contrasts_are_deterministic_and_stable() -> None:
@@ -811,8 +1216,13 @@ def test_prepost_helpers_normalize_columns_and_exclude_metadata() -> None:
     assert "group" in normalized.columns
     assert "group_x" not in normalized.columns
     assert quant_models._prepost_dimensions(normalized) == ["trust"]
-    with pytest.raises(ValueError, match="require group"):
+    both = composites.assign(group="correct")
+    normalized_both = quant_models._normalise_prepost_composites(both)
+    assert normalized_both["group"].tolist() == ["correct", "correct", "correct"]
+
+    with pytest.raises(ValueError) as exc_info:
         quant_models._normalise_prepost_composites(composites.drop(columns="group_x"))
+    assert str(exc_info.value) == "pre/post survey change models require group in the composite table"
 
 
 def test_prepost_wide_averages_duplicate_phase_rows() -> None:
@@ -871,7 +1281,6 @@ def test_prepost_mixed_row_preserves_model_and_change_contract(monkeypatch) -> N
     )
 
     class FakeResult:
-        converged = True
         nobs = 6
 
     class FakeModel:
@@ -882,16 +1291,18 @@ def test_prepost_mixed_row_preserves_model_and_change_contract(monkeypatch) -> N
             return FakeResult()
 
     monkeypatch.setattr(quant_models.smf, "mixedlm", lambda *args, **kwargs: FakeModel())
-    monkeypatch.setattr(
-        quant_models,
-        "_tidy_result",
-        lambda *_args, **_kwargs: pd.DataFrame(
+    tidy_calls: list[tuple[object, object, object]] = []
+
+    def fake_tidy(result: object, model_name: object, n: object) -> pd.DataFrame:
+        tidy_calls.append((result, model_name, n))
+        return pd.DataFrame(
             {
                 "term": ["Intercept", "phase[T.post]", "phase[T.post]:group[T.B]"],
                 "p_value": [0.9, 0.2, 0.01],
             }
-        ),
-    )
+        )
+
+    monkeypatch.setattr(quant_models, "_tidy_result", fake_tidy)
 
     row = quant_models._prepost_mixed_row(composites, "trust")
 
@@ -907,6 +1318,109 @@ def test_prepost_mixed_row_preserves_model_and_change_contract(monkeypatch) -> N
         "phase_p_value": 0.2,
         "interaction_p_value": 0.01,
     }
+    assert tidy_calls[0][1:] == ("prepost_trust", 6)
+
+
+def test_prepost_mixed_row_rejects_nonconverged_models_with_stable_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    composites = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1", "p1"],
+            "phase": [NORMALIZED_PRE_LABEL, NORMALIZED_POST_LABEL],
+            "group": ["A", "A"],
+            "trust": [1.0, 2.0],
+        }
+    )
+
+    class FakeResult:
+        converged = False
+
+    class FakeModel:
+        @staticmethod
+        def fit(*, reml: bool, disp: bool) -> FakeResult:
+            return FakeResult()
+
+    monkeypatch.setattr(quant_models.smf, "mixedlm", lambda *_args, **_kwargs: FakeModel())
+
+    with pytest.raises(ValueError) as exc_info:
+        quant_models._prepost_mixed_row(composites, "trust")
+
+    assert str(exc_info.value) == "MixedLM did not converge"
+
+
+def test_prepost_change_statistics_uses_fixed_bootstrap_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int | None] = []
+
+    def fake_mean_ci(values: pd.Series, *, n_boot: int = 10000):
+        calls.append(n_boot)
+        return {"mean": 1.0, "ci_low": 0.0, "ci_high": 2.0, "n": len(values)}
+
+    monkeypatch.setattr(quant_models, "mean_ci_bootstrap", fake_mean_ci)
+    wide = pd.DataFrame({NORMALIZED_PRE_LABEL: [1.0], NORMALIZED_POST_LABEL: [2.0]})
+
+    diff, stat = quant_models._prepost_change_statistics(wide)
+
+    assert diff.tolist() == [1.0]
+    assert stat == {"mean": 1.0, "ci_low": 0.0, "ci_high": 2.0, "n": 1}
+    assert calls == [1000]
+
+
+def test_paired_p_value_is_defined_for_two_pairs() -> None:
+    wide = pd.DataFrame(
+        {NORMALIZED_PRE_LABEL: [1.0, 2.0], NORMALIZED_POST_LABEL: [2.0, 4.0]},
+        index=["p1", "p2"],
+    )
+    paired = pd.Series([1.0, 2.0], index=["p1", "p2"])
+
+    assert np.isfinite(quant_models._paired_p_value(wide, paired))
+
+
+def test_paired_p_value_short_circuits_a_single_pair(monkeypatch: pytest.MonkeyPatch) -> None:
+    wide = pd.DataFrame({NORMALIZED_PRE_LABEL: [1.0], NORMALIZED_POST_LABEL: [2.0]}, index=["p1"])
+    paired = pd.Series([1.0], index=["p1"])
+    monkeypatch.setattr(quant_models.stats, "ttest_rel", lambda *_args, **_kwargs: pytest.fail("unexpected t-test"))
+
+    assert pd.isna(quant_models._paired_p_value(wide, paired))
+
+
+def test_paired_p_value_omits_missing_values_from_the_t_test() -> None:
+    wide = pd.DataFrame(
+        {
+            NORMALIZED_PRE_LABEL: [1.0, np.nan, 3.0],
+            NORMALIZED_POST_LABEL: [2.0, 3.0, 5.0],
+        },
+        index=["p1", "p2", "p3"],
+    )
+    paired = pd.Series([1.0, 2.0, 3.0], index=["p1", "p2", "p3"])
+
+    assert np.isfinite(quant_models._paired_p_value(wide, paired))
+
+
+def test_prepost_survey_change_models_adds_fdr_to_nonempty_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    composites = pd.DataFrame(
+        {
+            PARTICIPANT_KEY_COLUMN: ["p1"],
+            "phase": [NORMALIZED_PRE_LABEL],
+            "group": ["A"],
+            "trust": [1.0],
+        }
+    )
+    monkeypatch.setattr(
+        quant_models,
+        "_prepost_row",
+        lambda _composites, dimension: {"dimension": dimension, "phase_p_value": 0.2},
+    )
+    fdr_calls: list[list[float]] = []
+
+    def fake_fdr(values: pd.Series) -> list[float]:
+        fdr_calls.append(values.tolist())
+        return [0.3]
+
+    monkeypatch.setattr(quant_models, "benjamini_hochberg", fake_fdr)
+
+    result = prepost_survey_change_models(composites)
+
+    assert result["fdr_p_value"].tolist() == [0.3]
+    assert fdr_calls == [[0.2]]
 
 
 def test_prepost_phase_p_value_excludes_interaction_terms(monkeypatch) -> None:

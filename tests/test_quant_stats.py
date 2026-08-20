@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import warnings
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -64,10 +65,65 @@ def test_statistical_output_contracts_match_small_golden_fixtures() -> None:
     assert sensitivity["interpretation"] == "Powered only for relatively large effects; do not claim sample-size adequacy."
 
 
+def test_clean_converts_numeric_strings_to_float_values() -> None:
+    cleaned = quant_stats._clean(pd.Series(["1", "2", None]))
+
+    assert cleaned.dtype == np.dtype(float)
+    np.testing.assert_array_equal(cleaned, [1.0, 2.0])
+
+
+def test_mean_bootstrap_uses_the_documented_default_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[int, int]] = []
+
+    class FakeRng:
+        def choice(self, _values: np.ndarray, *, size: tuple[int, int], replace: bool) -> np.ndarray:
+            calls.append(size)
+            assert replace is True
+            return np.ones(size)
+
+    monkeypatch.setattr(quant_stats.np.random, "default_rng", lambda _seed: FakeRng())
+
+    mean_ci_bootstrap(pd.Series([1.0, 2.0, 3.0]))
+
+    assert calls == [(10000, 3)]
+
+
+def test_mean_bootstrap_coerces_numeric_string_inputs() -> None:
+    result = mean_ci_bootstrap(pd.Series(["1", "2", "3"]), seed=123, n_boot=5)
+
+    assert result["mean"] == 2.0
+    assert result["n"] == 3
+
+
 def test_bootstrap_public_defaults_are_stable() -> None:
     assert inspect.signature(mean_ci_bootstrap).parameters["n_boot"].default == 10000
     assert inspect.signature(hedges_g).parameters["n_boot"].default == 10000
     assert inspect.signature(spearman_with_ci).parameters["n_boot"].default == 10000
+
+
+def test_hedges_bootstrap_forwards_seed_and_default_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    seeds: list[int | None] = []
+    choice_calls = 0
+    original_default_rng = quant_stats.np.random.default_rng
+
+    def recording_default_rng(seed: int | None):
+        seeds.append(seed)
+        return original_default_rng(seed)
+
+    class FakeRng:
+        def choice(self, values: np.ndarray, size: int, replace: bool) -> np.ndarray:
+            nonlocal choice_calls
+            choice_calls += 1
+            assert replace is True
+            return np.resize(values, size)
+
+    monkeypatch.setattr(quant_stats.np.random, "default_rng", recording_default_rng)
+    hedges_g(pd.Series([1.0, 2.0]), pd.Series([2.0, 3.0]), seed=17, n_boot=2)
+    assert seeds == [17]
+
+    monkeypatch.setattr(quant_stats.np.random, "default_rng", lambda _seed: FakeRng())
+    hedges_g(pd.Series([1.0, 2.0]), pd.Series([2.0, 3.0]))
+    assert choice_calls == 20000
 
 
 def test_group_summary_ci_preserves_sorted_groups_and_sample_statistics() -> None:
@@ -151,15 +207,31 @@ def test_statistical_boundaries_keep_invalid_inputs_invalid() -> None:
     assert pd.isna(one_element_effect["ci_high"])
     assert quant_stats._valid_hedges_inputs(np.array([1.0]), np.array([2.0, 3.0]), 0.5) is False
     assert quant_stats._valid_hedges_inputs(np.array([1.0, 2.0]), np.array([3.0, 4.0]), 0.5) is True
+    assert pd.isna(quant_stats._hedges_g_estimate(np.array([1.0]), np.array([2.0, 3.0])))
+
+
+def test_hedges_g_estimate_short_circuits_before_invalid_singleton_math(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(quant_stats.math, "sqrt", lambda *_args: pytest.fail("unexpected pooled standard deviation"))
+
+    assert pd.isna(quant_stats._hedges_g_estimate(np.array([1.0]), np.array([2.0, 3.0])))
+
+
+def test_cronbach_alpha_uses_the_standard_two_item_formula() -> None:
+    assert cronbach_alpha(pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [1.0, 2.0, 3.0]})) == 1.0
 
 
 def test_pearson_negative_boundary_keeps_confidence_interval_negative() -> None:
-    result = pearson_with_fisher_ci(pd.Series([1, 2, 3, 4]), pd.Series([4, 3, 2, 1]))
+    result = pearson_with_fisher_ci(pd.Series([1, 2, 3, 4, 5]), pd.Series([5, 4, 3, 2, 1]))
+    positive = pearson_with_fisher_ci(pd.Series([1, 2, 3, 4, 5]), pd.Series([1, 2, 3, 4, 5]))
 
     assert result["correlation"] == -1.0
     assert np.isfinite(result["ci_low"])
     assert np.isfinite(result["ci_high"])
     assert result["ci_high"] < 0
+    assert np.isclose(result["ci_low"], -positive["ci_high"])
+    assert np.isclose(result["ci_high"], -positive["ci_low"])
+    assert np.isclose(positive["ci_low"], 0.9999840117977937)
+    assert np.isclose(positive["ci_high"], 0.9999999374543203)
 
 
 def test_spearman_empty_bootstrap_preserves_sample_size_field(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -185,6 +257,22 @@ def test_cronbach_alpha_handles_unit_total_variance_without_collapsing() -> None
     assert result == 0.0
 
 
+def test_cronbach_alpha_matches_the_standard_formula_for_nonperfect_items() -> None:
+    result = cronbach_alpha(pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [1.0, 2.0, 4.0]}))
+
+    assert np.isclose(result, 0.9473684210526316)
+    three_items = cronbach_alpha(
+        pd.DataFrame(
+            {
+                "a": [1.0, 2.0, 3.0, 4.0],
+                "b": [1.0, 2.0, 4.0, 4.0],
+                "c": [2.0, 2.0, 3.0, 5.0],
+            }
+        )
+    )
+    assert np.isclose(three_items, 0.9538461538461538)
+
+
 def test_correlation_fdr_reliability_and_sensitivity_outputs() -> None:
     corr = pearson_with_fisher_ci(pd.Series([1, 2, 3, 4, 5]), pd.Series([2, 4, 6, 8, 10]))
     adjusted = benjamini_hochberg([0.01, 0.04, 0.03])
@@ -199,10 +287,18 @@ def test_correlation_fdr_reliability_and_sensitivity_outputs() -> None:
     assert sensitivity["detectable_r_n45_80_power"] > 0.3
 
 
+def test_standardize_series_returns_float_values_for_numeric_strings() -> None:
+    standardized = standardize_series(pd.Series(["1", "2", "3"]))
+
+    assert standardized.dtype == np.dtype(float)
+    np.testing.assert_allclose(standardized, [-1.0, 0.0, 1.0])
+
+
 def test_benjamini_hochberg_preserves_original_order_and_handles_missing_p_values() -> None:
     adjusted = benjamini_hochberg(pd.Series([0.04, np.nan, 0.01, 0.03]))
 
     assert np.allclose(adjusted, [0.05333333333333334, 1.0, 0.04, 0.05333333333333334])
+    assert benjamini_hochberg([np.nan]) == [1.0]
 
 
 def test_welch_anova_returns_nan_for_small_groups() -> None:
@@ -309,6 +405,22 @@ def test_spearman_with_ci_tie_heavy_data_suppresses_constantinputwarning() -> No
     assert not any(issubclass(w.category, stats.ConstantInputWarning) for w in caught)
 
 
+def test_spearman_uses_a_narrow_constant_input_warning_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[object] = []
+
+    def recording_simplefilter(
+        _action: Literal["default", "error", "ignore", "always", "all", "module", "once"],
+        category: type[Warning] | tuple[type[Warning], ...] = Warning,
+    ) -> None:
+        calls.append(category)
+
+    monkeypatch.setattr(quant_stats.warnings, "simplefilter", recording_simplefilter)
+
+    spearman_with_ci(pd.Series([1.0, 1.0, 2.0]), pd.Series([1.0, 2.0, 3.0]), n_boot=2)
+
+    assert sum(category is stats.ConstantInputWarning for category in calls) == 3
+
+
 def test_spearman_with_ci_constant_input_returns_nan_without_warning() -> None:
     x = pd.Series([1, 1, 1, 1, 1, 1])
     y = pd.Series([1, 2, 3, 4, 5, 6])
@@ -323,6 +435,87 @@ def test_spearman_with_ci_constant_input_returns_nan_without_warning() -> None:
     assert pd.isna(result["ci_low"])
     assert pd.isna(result["ci_high"])
     assert not any(issubclass(w.category, stats.ConstantInputWarning) for w in caught)
+
+
+def test_spearman_constant_input_short_circuits_before_correlation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(quant_stats.stats, "spearmanr", lambda *_args, **_kwargs: pytest.fail("unexpected correlation call"))
+
+    result = spearman_with_ci(pd.Series([1.0, 1.0, 1.0]), pd.Series([1.0, 2.0, 3.0]))
+
+    assert pd.isna(result["correlation"])
+
+
+def test_spearman_constant_y_short_circuits_before_correlation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(quant_stats.stats, "spearmanr", lambda *_args, **_kwargs: pytest.fail("unexpected correlation call"))
+
+    result = spearman_with_ci(pd.Series([1.0, 2.0, 3.0]), pd.Series([1.0, 1.0, 1.0]))
+
+    assert pd.isna(result["correlation"])
+
+
+def test_spearman_keeps_nonconstant_unit_variance_inputs() -> None:
+    result = spearman_with_ci(pd.Series([0.0, 1.0, 2.0]), pd.Series([0.0, 1.0, 2.0]), n_boot=5)
+
+    assert result["correlation"] == 1.0
+    assert result["n"] == 3
+
+
+def test_spearman_does_not_treat_population_variance_one_as_constant() -> None:
+    values = pd.Series([-1.0, -1.0, 1.0, 1.0])
+
+    result = spearman_with_ci(values, values, n_boot=5)
+
+    assert result["correlation"] == 1.0
+    assert result["n"] == 4
+
+
+def test_spearman_uses_the_default_seed_and_bootstrap_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[int, int]] = []
+
+    def fake_bootstrap(_frame: pd.DataFrame, *, seed: int, n_boot: int) -> np.ndarray:
+        calls.append((seed, n_boot))
+        return np.array([0.5])
+
+    monkeypatch.setattr(quant_stats, "_spearman_bootstrap", fake_bootstrap)
+
+    spearman_with_ci(pd.Series([1.0, 2.0, 3.0]), pd.Series([3.0, 2.0, 1.0]))
+
+    assert calls == [(20260615, 10000)]
+
+
+def test_spearman_forwards_the_requested_seed_to_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[int | None, int]] = []
+
+    def fake_bootstrap(_frame: pd.DataFrame, *, seed: int, n_boot: int) -> np.ndarray:
+        calls.append((seed, n_boot))
+        return np.array([0.5])
+
+    monkeypatch.setattr(quant_stats, "_spearman_bootstrap", fake_bootstrap)
+
+    spearman_with_ci(pd.Series([1.0, 2.0, 3.0]), pd.Series([3.0, 2.0, 1.0]), seed=17, n_boot=4)
+
+    assert calls == [(17, 4)]
+
+
+def test_spearman_bootstrap_preserves_seed_and_replacement_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[int, int, int | None, bool | None]] = []
+
+    class FakeRng:
+        def __init__(self, seed: int | None):
+            self.seed = seed
+
+        def choice(self, length: int, size: int, replace: bool | None):
+            calls.append((length, size, self.seed, replace))
+            return np.arange(size)
+
+    monkeypatch.setattr(quant_stats.np.random, "default_rng", lambda seed: FakeRng(seed))
+
+    result = quant_stats._spearman_bootstrap(
+        pd.DataFrame({"x": [1.0, 2.0], "y": [1.0, 2.0]}), seed=11, n_boot=2
+    )
+
+    assert np.allclose(result, [1.0, 1.0])
+    assert calls == [(2, 2, 11, True), (2, 2, 11, True)]
 
 
 def test_spearman_with_ci_handles_empty_finite_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:

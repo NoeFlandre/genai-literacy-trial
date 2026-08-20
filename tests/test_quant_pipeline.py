@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import genai_literacy_trial.quant_pipeline as quant_pipeline
 from genai_literacy_trial.quant_config import QuantConfig
 from genai_literacy_trial.quant_pipeline import (
     COMPATIBILITY_INPUT_PREFIX,
@@ -15,7 +16,11 @@ from genai_literacy_trial.quant_pipeline import (
     INPUT_FILE_FORMATS,
     INPUT_READERS,
     _calibration_forest_source,
+    _numeric_input_issues,
+    _read_primary_input,
     _read_input,
+    _sample_bad_values,
+    _score_reliability_items,
     _merge_pre_composites,
     run_quant_analysis,
 )
@@ -80,6 +85,34 @@ def test_read_input_rejects_multiple_primary_formats(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="Multiple input files found for survey"):
         _read_input(tmp_path, "survey")
+
+
+def test_read_primary_input_preserves_dataset_name(monkeypatch, tmp_path) -> None:
+    def reader(_path: Path) -> pd.DataFrame:
+        return pd.DataFrame({"value": [1]})
+    calls: list[tuple[Path, str, object]] = []
+
+    def fake_read_dataset(path: Path, name: str, callback: object) -> pd.DataFrame:
+        calls.append((path, name, callback))
+        return pd.DataFrame({"value": [1]})
+
+    monkeypatch.setattr(quant_pipeline, "_read_dataset", fake_read_dataset)
+    path = tmp_path / "survey.csv"
+
+    result = _read_primary_input([(path, reader)], "survey")
+
+    assert result is not None
+    assert calls == [(path, "survey", reader)]
+
+
+def test_sample_bad_values_keeps_three_value_error_limit() -> None:
+    values = pd.Series(["bad1", "bad2", "bad3", "bad4"])
+
+    assert _sample_bad_values(values, pd.Series([True] * 4)) == "bad1, bad2, bad3"
+
+
+def test_numeric_input_issues_does_not_reject_fractional_noninteger_scores_by_default() -> None:
+    assert _numeric_input_issues(pd.Series([1.5]), "prompt_score") == []
 
 
 def test_quant_pipeline_compatibility_input_prefix_is_explicit() -> None:
@@ -148,6 +181,21 @@ def test_run_quant_analysis_reports_malformed_prompt_rows_before_modeling(tmp_pa
             tmp_path / "private",
             tmp_path / "public",
         )
+
+
+def test_score_reliability_items_uses_the_five_point_reverse_code() -> None:
+    config = QuantConfig.default()
+    pre = pd.DataFrame(
+        {
+            "control_1": [1, 2, 3, 4],
+            "control_reverse": [5, 4, 3, 2],
+        }
+    )
+
+    existing, scored = _score_reliability_items(pre, "locus_of_control", ["control_1", "control_reverse"], config)
+
+    assert existing == ["control_1", "control_reverse"]
+    assert scored["control_reverse"].tolist() == [1.0, 2.0, 3.0, 4.0]
 
 
 def test_run_quant_analysis_preserves_previous_public_outputs_when_publication_fails(tmp_path, monkeypatch) -> None:

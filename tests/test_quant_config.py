@@ -288,6 +288,10 @@ def test_quant_config_schema_preserves_root_and_unknown_section_errors() -> None
         quant_config._validate_quant_config_schema({"z_extra": {}, "a_extra": {}})
     assert str(unknown_error.value) == "Unknown configuration section: a_extra, z_extra"
 
+    with pytest.raises(ValueError) as key_error:
+        quant_config._validate_quant_config_schema({"privacy": {"z_extra": 1, "a_extra": 2}})
+    assert str(key_error.value) == "Unknown configuration keys in privacy: a_extra, z_extra"
+
 
 def test_mapping_helpers_preserve_section_name_for_non_tables() -> None:
     with pytest.raises(ValueError) as string_error:
@@ -297,6 +301,16 @@ def test_mapping_helpers_preserve_section_name_for_non_tables() -> None:
     with pytest.raises(ValueError) as numeric_error:
         quant_config._numeric_mapping(1, "grade_mapping")
     assert str(numeric_error.value) == "grade_mapping must be a table"
+
+
+def test_expected_inventory_nested_errors_preserve_source_path(tmp_path: Path) -> None:
+    path = tmp_path / "invalid_group_inventory.toml"
+    path.write_text("[group_counts]\nA = -1\n", encoding="utf-8")
+
+    with pytest.raises(ValueError) as exc_info:
+        load_expected_inventory(path)
+
+    assert str(exc_info.value) == f"group_counts.A must be a non-negative integer: {path}"
 
 
 def test_quant_config_accepts_minimum_public_cell_count() -> None:
