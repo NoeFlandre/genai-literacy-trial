@@ -20,6 +20,8 @@ MUTATION_PATTERNS = (
     "genai_literacy_trial.quant_pipeline.x__restore_original_outputs*",
     "genai_literacy_trial.quant_pipeline.x__rollback_public_output_publish*",
     "genai_literacy_trial.quant_pipeline.x__publish_staged_public_outputs*",
+    "scripts.check_crap.x_*",
+    "scripts.run_mutation_gate.x_*",
 )
 
 MUTATION_STATUS_BY_EXIT_CODE = {
@@ -43,27 +45,53 @@ MUTATION_STATUS_BY_EXIT_CODE = {
 }
 
 
+def _is_targeted_mutant(mutant_name: str) -> bool:
+    return any(fnmatch.fnmatch(mutant_name, pattern) for pattern in MUTATION_PATTERNS)
+
+
+def _metadata_exit_codes(metadata_path: Path) -> dict[object, object]:
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    exit_codes = metadata.get("exit_code_by_key")
+    if not isinstance(exit_codes, dict):
+        raise ValueError(f"Mutation metadata has no exit_code_by_key: {metadata_path}")
+    return exit_codes
+
+
+def _mutant_failure(mutant_name: object, exit_code: object, metadata_path: Path) -> tuple[str, str] | None:
+    if not isinstance(mutant_name, str):
+        raise ValueError(f"Mutation metadata has a non-string mutant name: {metadata_path}")
+    if not _is_targeted_mutant(mutant_name):
+        return None
+    status = MUTATION_STATUS_BY_EXIT_CODE.get(exit_code, "suspicious")
+    if status == "killed":
+        return None
+    return mutant_name, status
+
+
+def _metadata_failures(metadata_path: Path) -> list[tuple[str, str]]:
+    failures: list[tuple[str, str]] = []
+    for mutant_name, exit_code in _metadata_exit_codes(metadata_path).items():
+        failure = _mutant_failure(mutant_name, exit_code, metadata_path)
+        if failure is not None:
+            failures.append(failure)
+    return failures
+
+
 def mutation_failures(mutants_dir: Path = Path("mutants")) -> list[tuple[str, str]]:
     """Return targeted mutants that were not killed by the selected tests."""
-    failures: list[tuple[str, str]] = []
     metadata_paths = sorted(mutants_dir.rglob("*.meta"))
     if not metadata_paths:
         return [(str(mutants_dir), "not checked")]
+    return sorted(failure for path in metadata_paths for failure in _metadata_failures(path))
 
-    for metadata_path in metadata_paths:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        exit_codes = metadata.get("exit_code_by_key")
-        if not isinstance(exit_codes, dict):
-            raise ValueError(f"Mutation metadata has no exit_code_by_key: {metadata_path}")
-        for mutant_name, exit_code in exit_codes.items():
-            if not isinstance(mutant_name, str):
-                raise ValueError(f"Mutation metadata has a non-string mutant name: {metadata_path}")
-            if not any(fnmatch.fnmatch(mutant_name, pattern) for pattern in MUTATION_PATTERNS):
-                continue
-            status = MUTATION_STATUS_BY_EXIT_CODE.get(exit_code, "suspicious")
-            if status != "killed":
-                failures.append((mutant_name, status))
-    return sorted(failures)
+
+def _report_mutation_gate(failures: list[tuple[str, str]]) -> None:
+    if failures:
+        print(f"Mutation gate failed: {len(failures)} targeted mutant(s) were not killed.")
+        for mutant_name, status in failures:
+            print(f"  {mutant_name}: {status}")
+        raise SystemExit(1)
+    print("Mutation gate passed: all targeted mutants were killed.")
 
 
 def main() -> None:
@@ -76,18 +104,12 @@ def main() -> None:
     import statsmodels  # noqa: F401
     from mutmut.__main__ import cli
 
-    default_run = len(sys.argv) == 1
-    if default_run:
-        sys.argv.extend(("run", "--max-children", "8", *MUTATION_PATTERNS))
-    cli()
-    if default_run:
-        failures = mutation_failures()
-        if failures:
-            print(f"Mutation gate failed: {len(failures)} targeted mutant(s) were not killed.")
-            for mutant_name, status in failures:
-                print(f"  {mutant_name}: {status}")
-            raise SystemExit(1)
-        print("Mutation gate passed: all targeted mutants were killed.")
+    if len(sys.argv) != 1:
+        cli(standalone_mode=False)
+        return
+    sys.argv.extend(("run", "--max-children", "8", *MUTATION_PATTERNS))
+    cli(standalone_mode=False)
+    _report_mutation_gate(mutation_failures())
 
 
 if __name__ == "__main__":

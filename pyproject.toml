@@ -51,6 +51,8 @@ source_paths = [
   "src/genai_literacy_trial/quant_preprocess.py",
   "src/genai_literacy_trial/quant_stats.py",
   "src/genai_literacy_trial/validate_artifacts.py",
+  "scripts/check_crap.py",
+  "scripts/run_mutation_gate.py",
 ]
 also_copy = ["config/", "src/genai_literacy_trial/"]
 mutate_only_covered_lines = true
@@ -68,6 +70,13 @@ do_not_mutate_patterns = [
   'path\.read_text\(encoding="utf-8"\)',
   'cast\(dict\[str, object\], recorded_value\)',
   'cast\(dict\[str, object\], value\)',
+  'cast\(dict\[str, object\], entry\)',
+  'cast\(dict\[str, object\], method\)',
+  'cast\(Mapping\[str, object\], value\)',
+  'cast\(dict\[str, object\], candidate\)',
+  'cast\(float, summary\.get\("percent_covered", 0\.0\)\)',
+  'cast\(int, function\["lineno"\]\)',
+  'cast\(int, function\["complexity"\]\)',
   'cast\(dict\[str, list\[str\]\], _as_table\(value, section\)\)',
   'cast\(dict\[str, float\], _as_table\(value, section\)\)',
   'cast\(dict\[str, str\], _as_table\(data\.get\("columns", \{\}\), "columns"\)\)',
@@ -121,9 +130,16 @@ do_not_mutate_patterns = [
   'df\.var\(axis=0, ddof=1\)',
   'zip\(group_cols, keys, strict=True\)',
   'TemporaryDirectory\(prefix=.*backup-.*dir=public_output_dir\.parent.*\)',
+  'entry\.get\("methods", \[\]\)',
+  'coverage_file\.get\("files", \{\}\)',
+  'files\.get\(path, \{\}\)',
+  'file_data\.get\("functions", \{\}\)',
+  'candidate\.get\("summary", \{\}\)',
+  'read_text\(encoding="utf-8"\)',
 ]
 pytest_add_cli_args_test_selection = [
   "tests/test_high_risk_contracts.py",
+  "tests/test_quality_tooling.py",
   "tests/test_quant_config.py",
   "tests/test_quant_models.py",
   "tests/test_quant_pipeline.py::test_read_primary_input_preserves_dataset_name",

@@ -18,9 +18,9 @@ Run the same checks used by the main CI job:
 ```bash
 uv run ruff check .
 uv run ty check .
-uv run python -m coverage run --source=src -m pytest
+uv run python -m coverage run --source=src,scripts -m pytest
 uv run python -m coverage json -o /tmp/genai-literacy-trial-coverage.json
-uv run radon cc src/genai_literacy_trial -j > /tmp/genai-literacy-trial-cc.json
+uv run radon cc src scripts -j > /tmp/genai-literacy-trial-cc.json
 uv run python scripts/check_crap.py --coverage-json /tmp/genai-literacy-trial-coverage.json --radon-json /tmp/genai-literacy-trial-cc.json
 uv run mkdocs build --strict --site-dir /tmp/genai-literacy-trial-site
 uv run python scripts/reproduce_small.py
@@ -63,16 +63,16 @@ uv run python scripts/run_mutation_gate.py
 
 The default gate must report zero surviving, untested, or timed-out mutants. Equivalent mutations are excluded explicitly in `[tool.mutmut]`; those exclusions are limited to ordering flags, runtime-only casts, temporary-directory naming/location defaults, and explicit numeric casts.
 
-The CRAP gate is strict: every measured source function must score **below 6**. The command fails at exactly 6.0, not only above it:
+The CRAP gate is strict: every measured function in `src/` and `scripts/` must score **below 6**. The command fails at exactly 6.0, not only above it:
 
 ```bash
-uv run python -m coverage run --source=src -m pytest
+uv run python -m coverage run --source=src,scripts -m pytest
 uv run python -m coverage json -o /tmp/genai-literacy-trial-coverage.json
-uv run radon cc src/genai_literacy_trial -j > /tmp/genai-literacy-trial-cc.json
+uv run radon cc src scripts -j > /tmp/genai-literacy-trial-cc.json
 uv run python scripts/check_crap.py --coverage-json /tmp/genai-literacy-trial-coverage.json --radon-json /tmp/genai-literacy-trial-cc.json
 ```
 
-CRAP is calculated per function as `complexity² × (1 - coverage)³ + complexity`. The current full-source measurement has a maximum score of 5.27. Keep the maximum below 6; add focused tests or split a complex function when the gate fails.
+CRAP is calculated per function as `complexity² × (1 - coverage)³ + complexity`. Keep the maximum below 6; add focused tests or split a complex function when the gate fails.
 
 ## Safe changes
 

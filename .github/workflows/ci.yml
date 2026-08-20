@@ -18,9 +18,9 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ty check .
       - run: uv run mkdocs build --strict --site-dir /tmp/genai-literacy-trial-site
-      - run: uv run python -m coverage run --source=src -m pytest
+      - run: uv run python -m coverage run --source=src,scripts -m pytest
       - run: uv run python -m coverage json -o /tmp/genai-literacy-trial-coverage.json
-      - run: uv run radon cc src/genai_literacy_trial -j > /tmp/genai-literacy-trial-cc.json
+      - run: uv run radon cc src scripts -j > /tmp/genai-literacy-trial-cc.json
       - run: uv run python scripts/check_crap.py --coverage-json /tmp/genai-literacy-trial-coverage.json --radon-json /tmp/genai-literacy-trial-cc.json
       - run: uv run python scripts/reproduce_small.py
       - run: uv run python scripts/validate_artifacts.py --mode small --public-output-dir repro_outputs/small/public
