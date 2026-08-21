@@ -86,6 +86,9 @@ Use this as a navigation aid before editing.
 `scripts/check_repo_hygiene.py`
 : Compatibility wrapper for `genai_literacy_trial.repo_hygiene`.
 
+`scripts/qa_gauntlet.py`
+: Fail-fast deterministic completion gate. Runs baseline, Ruff, `ty`, tests, acceptance tests, architecture checks, CRAP, mutation tests, the synthetic smoke test, and diff review in that order.
+
 ## Data And Config
 
 `data/synthetic/survey.csv`
@@ -132,6 +135,12 @@ Use this as a navigation aid before editing.
 
 `tests/test_reproducibility_scripts.py`
 : Public smoke runner and artifact validator.
+
+`tests/test_architecture.py`
+: Package-versus-wrapper import boundary and compatibility-wrapper checks.
+
+`tests/test_qa_gauntlet.py`
+: Exact QA stage order, command coverage, and fail-fast behavior.
 
 `tests/test_privacy.py`
 : Privacy scanner behavior.

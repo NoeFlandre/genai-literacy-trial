@@ -64,6 +64,14 @@ uv lock --check
 uv sync --locked --dev
 ```
 
+Before handing off any change, run the deterministic QA gauntlet:
+
+```bash
+uv run --locked --no-sync python scripts/qa_gauntlet.py
+```
+
+It is fail-fast and its fixed order is baseline, Ruff, `ty`, full tests, acceptance tests, architecture checks, CRAP, mutation tests, smoke test, and diff review. The repository-wide privacy audit remains a separate release check.
+
 Run Ruff lint:
 
 ```bash

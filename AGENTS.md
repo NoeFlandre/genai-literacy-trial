@@ -18,13 +18,11 @@ This repo is a privacy-preserving reproducibility package for a GenAI literacy p
 ```bash
 uv lock --check
 uv sync --locked --dev
-uv run ruff check .
-uv run ty check .
-uv run mkdocs build --strict --site-dir /tmp/genai-literacy-trial-site
-uv run pytest
-uv run python scripts/check_repo_hygiene.py
+uv run --locked --no-sync python scripts/qa_gauntlet.py
 uv run genai-literacy-trial audit-privacy
 ```
+
+The QA runner is the completion gate. It must run in this order and stop on failure: baseline, Ruff, `ty`, full tests, acceptance tests, architecture checks, CRAP, mutation tests, smoke test, and diff review. Do not report completion while a stage is skipped. The repository-wide privacy audit remains a separate release check after the gauntlet.
 
 Main smoke path:
 
@@ -34,7 +32,7 @@ uv run python scripts/validate_artifacts.py --mode small --public-output-dir rep
 uv run genai-literacy-trial audit-privacy --root repro_outputs/small/public
 ```
 
-The files under `scripts/` are compatibility wrappers around package modules. Prefer keeping reusable logic in `src/genai_literacy_trial/`; module forms such as `uv run python -m genai_literacy_trial.reproduce_small` should stay equivalent to the script wrappers.
+The files under `scripts/` include compatibility wrappers and the ordered QA runner. Prefer keeping reusable project logic in `src/genai_literacy_trial/`; module forms such as `uv run python -m genai_literacy_trial.reproduce_small` should stay equivalent to the script wrappers.
 
 Ruff lint, `ty` type checking, and the strict MkDocs build are configured in `pyproject.toml` and CI.
 

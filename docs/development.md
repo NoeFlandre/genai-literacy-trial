@@ -13,21 +13,28 @@ The development group includes pytest, coverage, Ruff, `ty`, MkDocs Material, mu
 
 ## Quality gates
 
-Run the same checks used by the main CI job:
+Run the deterministic completion gate used by CI from the repository root:
 
 ```bash
-uv run ruff check .
-uv run ty check .
-uv run python -m coverage run --source=src,scripts -m pytest
-uv run python -m coverage json -o /tmp/genai-literacy-trial-coverage.json
-uv run radon cc src scripts -j > /tmp/genai-literacy-trial-cc.json
-uv run python scripts/check_crap.py --coverage-json /tmp/genai-literacy-trial-coverage.json --radon-json /tmp/genai-literacy-trial-cc.json
-uv run mkdocs build --strict --site-dir /tmp/genai-literacy-trial-site
-uv run python scripts/reproduce_small.py
-uv run python scripts/validate_artifacts.py --mode small --public-output-dir repro_outputs/small/public
-uv run genai-literacy-trial audit-privacy --root repro_outputs/small/public
-uv run python scripts/check_repo_hygiene.py
+uv lock --check
+uv sync --locked --dev
+uv run --locked --no-sync python scripts/qa_gauntlet.py
 ```
+
+The runner is fail-fast and executes these stages in this exact order:
+
+1. Baseline: locked dependency resolution and installation.
+2. Ruff lint.
+3. `ty` type checking.
+4. Full tests with fresh coverage data.
+5. Focused acceptance tests for high-risk contracts, reproducibility, and artifacts.
+6. Architecture checks for package boundaries, CLI imports, docs wiring, and a strict MkDocs build.
+7. CRAP calculation over `src/` and `scripts/`.
+8. Mutation tests through `scripts/run_mutation_gate.py`.
+9. Synthetic smoke reproduction, artifact validation, public privacy scan, and repository hygiene.
+10. Diff review with `git diff --check HEAD`, diff summary, and worktree status.
+
+The runner writes only temporary coverage, Radon, and documentation files under `/tmp`; smoke outputs remain under ignored `repro_outputs/`. It does not run the repository-wide privacy audit because that audit is a separate release check and may include local/private paths.
 
 The repository-wide privacy command is part of the release gate:
 

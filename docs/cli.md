@@ -62,6 +62,16 @@ uv run python scripts/check_repo_hygiene.py
 
 `audit-privacy` accepts `--root` and optional `--local-patterns`. The hygiene wrapper checks tracked file sizes; its default threshold is 5 MiB.
 
+## QA gauntlet
+
+Run the ordered local completion gate after installing the locked development environment:
+
+```bash
+uv run --locked --no-sync python scripts/qa_gauntlet.py
+```
+
+The runner executes baseline, Ruff, `ty`, tests, acceptance tests, architecture checks, CRAP, mutation tests, the synthetic smoke test, and diff review. It stops at the first failure and uses ignored or temporary output paths.
+
 ## Legacy aggregate commands
 
 ```bash

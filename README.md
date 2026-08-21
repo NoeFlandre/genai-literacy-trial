@@ -51,16 +51,16 @@ The `analyze-quant` command is the primary quantitative workflow. `reproduce-pap
 
 ## Checks
 
+Run the deterministic completion gate from the repository root:
+
 ```bash
 uv lock --check
 uv sync --locked --dev
-uv run ruff check .
-uv run ty check .
-uv run mkdocs build --strict --site-dir /tmp/genai-literacy-trial-site
-uv run pytest
-uv run python scripts/check_repo_hygiene.py
+uv run --locked --no-sync python scripts/qa_gauntlet.py
 uv run genai-literacy-trial audit-privacy
 ```
+
+The gauntlet runs, in order: baseline, Ruff, `ty`, the full test suite, focused acceptance tests, architecture checks, CRAP, mutation tests, the synthetic smoke test, and diff review. It stops at the first failed command.
 
 ## Documentation
 

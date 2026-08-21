@@ -27,7 +27,9 @@ def test_public_mkdocs_site_has_verified_navigation_and_ci_build() -> None:
         assert page in config
     nav = config.split("\nnav:", maxsplit=1)[1]
     assert "agent_playbook.md" not in nav
-    assert "mkdocs build --strict" in ci
+    gauntlet = (REPO_ROOT / "scripts" / "qa_gauntlet.py").read_text(encoding="utf-8")
+    assert '_uv_run("mkdocs", "build", "--strict"' in gauntlet
+    assert "scripts/qa_gauntlet.py" in ci
 
 
 def test_agent_playbook_documents_optional_manifest_hash_validation() -> None:

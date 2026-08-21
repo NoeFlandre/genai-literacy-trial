@@ -27,11 +27,13 @@ def test_quality_tooling_declares_ty_and_runs_it_in_ci() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dev_dependencies = project["dependency-groups"]["dev"]
     ci_text = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    gauntlet_text = (REPO_ROOT / "scripts" / "qa_gauntlet.py").read_text(encoding="utf-8")
 
     assert any(dependency == "ty" or dependency.startswith("ty ") or dependency.startswith("ty>") for dependency in dev_dependencies)
-    assert "uv run ty check ." in ci_text
-    assert "coverage run --source=src,scripts" in ci_text
-    assert "radon cc src scripts" in ci_text
+    assert '_uv_run("ty", "check", ".")' in gauntlet_text
+    assert "scripts/qa_gauntlet.py" in ci_text
+    assert '"coverage", "run", "--source=src,scripts"' in gauntlet_text
+    assert '"radon", "cc", "src", "scripts", "-j"' in gauntlet_text
 
 
 def test_crap_score_gate_is_strictly_below_six() -> None:
