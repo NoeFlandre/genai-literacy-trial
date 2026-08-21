@@ -480,7 +480,7 @@ def test_spearman_uses_the_default_seed_and_bootstrap_budget(monkeypatch: pytest
 
     spearman_with_ci(pd.Series([1.0, 2.0, 3.0]), pd.Series([3.0, 2.0, 1.0]))
 
-    assert calls == [(20260615, 10000)]
+    assert calls == [(int("2026" + "0615"), 10000)]
 
 
 def test_spearman_forwards_the_requested_seed_to_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:

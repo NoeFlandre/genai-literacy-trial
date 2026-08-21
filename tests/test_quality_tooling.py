@@ -328,6 +328,38 @@ def test_mutation_gate_main_reports_default_run_failures(
     )
 
 
+def test_mutation_gate_cleans_generated_artifacts_after_default_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mutants_dir = tmp_path / "mutants"
+    mutants_dir.mkdir()
+    (mutants_dir / "tests").mkdir()
+    (mutants_dir / "tests" / "test_quant_stats.py").write_text("generated fixture\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["run_mutation_gate.py"])
+    monkeypatch.setattr(mutmut_main, "cli", lambda **kwargs: None)
+    monkeypatch.setattr(mutation_gate, "mutation_failures", lambda: [])
+
+    mutation_gate.main()
+
+    assert not mutants_dir.exists()
+
+
+def test_mutation_gate_targets_the_exact_mutation_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "mutants").mkdir()
+    removed: list[Path] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(mutation_gate.shutil, "rmtree", lambda path: removed.append(path))
+
+    mutation_gate._cleanup_mutation_artifacts()
+
+    assert removed == [Path("mutants")]
+
+
 def test_mutation_gate_selects_publication_regression_tests() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     selected_tests = project["tool"]["mutmut"]["pytest_add_cli_args_test_selection"]

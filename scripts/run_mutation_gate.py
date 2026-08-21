@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -94,6 +95,12 @@ def _report_mutation_gate(failures: list[tuple[str, str]]) -> None:
     print("Mutation gate passed: all targeted mutants were killed.")
 
 
+def _cleanup_mutation_artifacts() -> None:
+    mutants_dir = Path("mutants")
+    if mutants_dir.exists():
+        shutil.rmtree(mutants_dir)
+
+
 def main() -> None:
     # Import numerical dependencies before mutmut's coverage pre-pass. This avoids
     # duplicate NumPy extension imports on macOS when mutmut unloads test modules.
@@ -107,9 +114,12 @@ def main() -> None:
     if len(sys.argv) != 1:
         cli(standalone_mode=False)
         return
-    sys.argv.extend(("run", "--max-children", "8", *MUTATION_PATTERNS))
-    cli(standalone_mode=False)
-    _report_mutation_gate(mutation_failures())
+    try:
+        sys.argv.extend(("run", "--max-children", "8", *MUTATION_PATTERNS))
+        cli(standalone_mode=False)
+        _report_mutation_gate(mutation_failures())
+    finally:
+        _cleanup_mutation_artifacts()
 
 
 if __name__ == "__main__":
