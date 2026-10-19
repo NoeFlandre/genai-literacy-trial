@@ -129,7 +129,6 @@ def _read_input(input_dir: Path, name: str) -> pd.DataFrame:
     primary = _read_primary_input(candidates, name)
     if primary is not None:
         return primary
-    # compatibility with clean_private_data CLI input names
     alt = input_dir / f"{COMPATIBILITY_INPUT_PREFIX}{name}.csv"
     if alt.exists():
         return _read_compatibility_dataset(alt, name)

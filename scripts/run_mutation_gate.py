@@ -79,7 +79,6 @@ def _metadata_failures(metadata_path: Path) -> list[tuple[str, str]]:
 
 
 def mutation_failures(mutants_dir: Path = Path("mutants")) -> list[tuple[str, str]]:
-    """Return targeted mutants that were not killed by the selected tests."""
     metadata_paths = sorted(mutants_dir.rglob("*.meta"))
     if not metadata_paths:
         return [(str(mutants_dir), "not checked")]
@@ -101,15 +100,18 @@ def _cleanup_mutation_artifacts() -> None:
         shutil.rmtree(mutants_dir)
 
 
-def main() -> None:
-    # Import numerical dependencies before mutmut's coverage pre-pass. This avoids
-    # duplicate NumPy extension imports on macOS when mutmut unloads test modules.
+def _load_mutmut_cli_after_numerical_preload():
     import matplotlib  # noqa: F401
     import numpy  # noqa: F401
     import pandas  # noqa: F401
     import scipy  # noqa: F401
     import statsmodels  # noqa: F401
     from mutmut.__main__ import cli
+    return cli
+
+
+def main() -> None:
+    cli = _load_mutmut_cli_after_numerical_preload()
 
     if len(sys.argv) != 1:
         cli(standalone_mode=False)
